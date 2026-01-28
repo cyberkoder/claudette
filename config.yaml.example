@@ -41,6 +41,7 @@ vad:
   threshold: 0.5           # Speech probability threshold (0.0-1.0)
   min_speech_ms: 250       # Minimum speech duration to trigger (ms)
   silence_duration: 1.5    # Seconds of silence to end recording
+  device: "auto"           # Device: "auto", "cuda", or "cpu"
 
 tts:
   # Text-to-Speech settings using Edge TTS

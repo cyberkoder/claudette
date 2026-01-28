@@ -167,9 +167,14 @@ class Claudette:
             return yaml.safe_load(f)
 
     def _init_vad(self):
-        """Initialize Silero VAD model."""
-        logger.info("Loading Silero VAD model...")
-        self._print_status("Loading VAD model...")
+        """Initialize Silero VAD model with optional GPU acceleration."""
+        # Determine device for VAD
+        vad_device = self.config.get("vad", {}).get("device", "auto")
+        if vad_device == "auto":
+            vad_device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        logger.info(f"Loading Silero VAD model on {vad_device}...")
+        self._print_status(f"Loading VAD model ({vad_device})...")
 
         # Load Silero VAD
         self.vad_model, utils = torch.hub.load(
@@ -180,7 +185,13 @@ class Claudette:
             trust_repo=True
         )
 
-        logger.info("VAD model loaded successfully")
+        # Move model to appropriate device
+        self.vad_device = vad_device
+        if vad_device == "cuda":
+            self.vad_model = self.vad_model.to(vad_device)
+            logger.info("VAD model moved to CUDA")
+
+        logger.info(f"VAD model loaded successfully on {vad_device}")
         self._print_status("VAD model loaded")
 
     def _init_whisper(self):
@@ -509,8 +520,13 @@ class Claudette:
                     vad_chunk = pending_audio[:chunk_samples]
                     pending_audio = pending_audio[chunk_samples:]
 
+                    # Move tensor to VAD device (CPU or CUDA)
+                    vad_tensor = torch.from_numpy(vad_chunk)
+                    if self.vad_device == "cuda":
+                        vad_tensor = vad_tensor.to(self.vad_device)
+
                     speech_prob = self.vad_model(
-                        torch.from_numpy(vad_chunk),
+                        vad_tensor,
                         self.sample_rate
                     ).item()
 
