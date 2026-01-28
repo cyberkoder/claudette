@@ -63,6 +63,8 @@ class AudioProcessor:
 
     def _normalize_audio(self, audio: np.ndarray) -> np.ndarray:
         """Normalize audio to maximize dynamic range."""
+        if len(audio) == 0:
+            return audio
         max_val = np.max(np.abs(audio))
         if max_val > 0:
             # Normalize to 95% of max to prevent clipping

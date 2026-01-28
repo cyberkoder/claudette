@@ -1,1 +1,1 @@
-# Tests for Claudette
+"""Tests for Claudette voice assistant."""
