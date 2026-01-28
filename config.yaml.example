@@ -32,9 +32,20 @@ audio:
   sample_rate: 16000
   channels: 1
 
-# Wake word to activate Claudette
-# She responds to many variations automatically
-wake_word: "claudette"
+audio_processing:
+  # Audio enhancement for better recognition
+  noise_reduce: true               # Enable spectral noise reduction
+  high_pass_cutoff: 80.0           # High-pass filter cutoff (Hz), 0 to disable
+  normalize: true                  # Normalize audio levels
+
+# Wake word configuration
+wake_word:
+  word: "claudette"                # Primary wake word
+  # Add custom variants for your accent/pronunciation:
+  # variants:
+  #   - "cloud it"
+  #   - "clod it"
+  # Claudette automatically handles many common variations
 
 vad:
   # Voice Activity Detection settings
@@ -45,10 +56,17 @@ vad:
 
 tts:
   # Text-to-Speech settings using Edge TTS
-  # British English female voices:
+  # Voice options (say "list voices" to hear all):
+  #   British English:
   #   - en-GB-SoniaNeural (default) - Professional, clear
   #   - en-GB-LibbyNeural - Warm, friendly
   #   - en-GB-MaisieNeural - Young, energetic
+  #   - en-GB-RyanNeural - Male British voice
+  #   American English:
+  #   - en-US-AriaNeural - Clear, professional
+  #   - en-US-JennyNeural - Warm, conversational
+  #   Australian English:
+  #   - en-AU-NatashaNeural - Australian accent
   voice: "en-GB-SoniaNeural"
   rate: "+0%"              # Speech rate: -50% to +100%
   pitch: "+0Hz"            # Pitch adjustment: -50Hz to +50Hz
@@ -61,4 +79,36 @@ memory:
 
 skills:
   # Custom skills/plugins directory
-  # directory: "./skills"          # Path to custom skills
+  # directory: "./skills"
+
+sounds:
+  # Sound effects for state changes
+  enabled: true                    # Enable audio feedback sounds
+  volume: 0.3                      # Volume level (0.0-1.0)
+
+hotkey:
+  # Keyboard shortcut to activate Claudette
+  enabled: true                    # Enable hotkey activation
+  # key: "<ctrl>+<shift>+c"        # Linux/Windows default
+  # key: "<cmd>+<shift>+c"         # macOS default
+  # Other examples: "<f12>", "<ctrl>+<alt>+c"
+
+tray:
+  # System tray icon
+  enabled: true                    # Show icon in system tray
+  waveform: false                  # Show floating waveform window
+
+notifications:
+  # Desktop notifications
+  enabled: false                   # Show desktop notifications (off by default)
+
+personality:
+  # AI personality preset
+  # Options: claudette (default), professional, friendly, butler, pirate
+  preset: "claudette"
+  # Or provide a custom prompt:
+  # custom_prompt: "You are a helpful assistant..."
+
+offline:
+  # Offline fallback mode
+  enabled: true                    # Enable offline detection and fallback responses          # Path to custom skills

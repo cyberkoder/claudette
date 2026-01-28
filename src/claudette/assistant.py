@@ -41,6 +41,13 @@ except ImportError:
 
 # Import skills system
 from .skills import SkillManager
+from .sounds import SoundEffects
+from .hotkey import HotkeyManager, get_default_hotkey
+from .tray import TrayIcon, WaveformWindow
+from .notifications import NotificationManager
+from .personalities import get_personality, CLAUDETTE_DEFAULT
+from .audio_processing import AudioProcessor
+from .offline import OfflineFallback
 
 
 # Set up logging - use current working directory for logs
@@ -84,20 +91,8 @@ def find_config_file(config_name: str = "config.yaml") -> Path:
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 
-# Claudette's personality prompt for Claude CLI
-CLAUDETTE_SYSTEM_PROMPT = """You are Claudette, a sophisticated AI assistant with the personality of a 1940s British bombshell - think Lauren Bacall meets British intelligence.
-
-Your personality traits:
-- Witty, sharp, and occasionally playful with dry British humor
-- Confident and composed, never flustered
-- Warm but professional - you call the user "sir" naturally
-- Knowledgeable and helpful, delivering information with elegance
-- Occasionally uses period-appropriate expressions subtly (not overdone)
-- Your responses are concise and conversational - this is spoken dialogue, not text
-
-Keep responses brief and natural for speech. You're having a conversation, not writing an essay.
-Never use markdown, bullet points, or formatting - speak naturally.
-If asked who you are, you're Claudette, a personal AI assistant."""
+# Default personality prompt (can be overridden in config)
+CLAUDETTE_SYSTEM_PROMPT = CLAUDETTE_DEFAULT
 
 
 class VoiceState:
@@ -200,13 +195,40 @@ class Claudette:
         if self.whisper_mode == "local":
             self._init_whisper()
 
-        # Wake word
-        self.wake_word = self.config.get("wake_word", "claudette").lower()
+        # Wake word settings
+        wake_config = self.config.get("wake_word", {})
+        if isinstance(wake_config, str):
+            # Simple string format (backward compatible)
+            self.wake_word = wake_config.lower()
+            self.wake_word_variants = []
+        else:
+            # Dict format with variants
+            self.wake_word = wake_config.get("word", "claudette").lower()
+            self.wake_word_variants = [v.lower() for v in wake_config.get("variants", [])]
+
+        # Default variants for common transcription errors
+        self.default_wake_variants = [
+            "claudet", "claudia", "clodette", "cladette", "cloud", "claud",
+            "audit", "audette", "kladette", "klodette", "plot it", "godette",
+            "colette", "clodet", "clawed", "plaudit", "laudette", "lodette",
+            "la dette", "hey claudette", "hey claudet", "okay claudette"
+        ]
 
         # TTS settings - British English female voice
         self.tts_voice = self.config.get("tts", {}).get("voice", "en-GB-SoniaNeural")
         self.tts_rate = self.config.get("tts", {}).get("rate", "+0%")
         self.tts_pitch = self.config.get("tts", {}).get("pitch", "+0Hz")
+
+        # Personality settings
+        personality_config = self.config.get("personality", {})
+        personality_name = personality_config.get("preset", "claudette")
+        custom_prompt = personality_config.get("custom_prompt")
+        if custom_prompt:
+            self.system_prompt = custom_prompt
+            logger.info("Using custom personality prompt")
+        else:
+            self.system_prompt = get_personality(personality_name)
+            logger.info(f"Using personality preset: {personality_name}")
 
         # Initialize pygame mixer for audio playback with proper settings
         pygame.mixer.pre_init(frequency=24000, size=-16, channels=1, buffer=2048)
@@ -241,6 +263,56 @@ class Claudette:
             skills_dir = Path(skills_dir).expanduser()
         self.skills = SkillManager(skills_dir)
         logger.info(f"Loaded {len(self.skills.skills)} skills")
+
+        # Initialize sound effects
+        sounds_config = self.config.get("sounds", {})
+        self.sounds = SoundEffects(
+            enabled=sounds_config.get("enabled", True),
+            volume=sounds_config.get("volume", 0.3)
+        )
+
+        # Initialize hotkey support
+        hotkey_config = self.config.get("hotkey", {})
+        self.hotkey_triggered = threading.Event()
+        self.hotkey_manager = HotkeyManager(
+            enabled=hotkey_config.get("enabled", True),
+            hotkey=hotkey_config.get("key", get_default_hotkey()),
+            callback=self._on_hotkey_pressed
+        )
+
+        # Initialize system tray
+        tray_config = self.config.get("tray", {})
+        self.tray = TrayIcon(
+            enabled=tray_config.get("enabled", True),
+            on_activate=self._on_hotkey_pressed,
+            on_quit=self._shutdown
+        )
+
+        # Initialize waveform window (optional)
+        self.waveform = WaveformWindow(
+            enabled=tray_config.get("waveform", False)
+        )
+
+        # Initialize desktop notifications
+        notify_config = self.config.get("notifications", {})
+        self.notifications = NotificationManager(
+            enabled=notify_config.get("enabled", False)  # Off by default
+        )
+
+        # Initialize audio processor for noise reduction
+        audio_processing_config = self.config.get("audio_processing", {})
+        self.audio_processor = AudioProcessor(
+            sample_rate=self.sample_rate,
+            noise_reduce=audio_processing_config.get("noise_reduce", True),
+            high_pass_cutoff=audio_processing_config.get("high_pass_cutoff", 80.0),
+            normalize=audio_processing_config.get("normalize", True)
+        )
+
+        # Initialize offline fallback
+        offline_config = self.config.get("offline", {})
+        self.offline = OfflineFallback(
+            enabled=offline_config.get("enabled", True)
+        )
 
         # Initialize VAD model
         self._init_vad()
@@ -345,11 +417,32 @@ class Claudette:
         self.current_state = state
         self._print_status(state, end="")
 
+        # Update tray icon state
+        tray_states = {
+            VoiceState.LISTENING: "listening",
+            VoiceState.LISTENING_CONVO: "listening",
+            VoiceState.RECORDING: "recording",
+            VoiceState.PROCESSING: "processing",
+            VoiceState.THINKING: "processing",
+            VoiceState.SPEAKING: "speaking",
+        }
+        tray_state = tray_states.get(state, "idle")
+        self.tray.set_state(tray_state)
+
+    def _shutdown(self):
+        """Graceful shutdown."""
+        self.running = False
+
     def _audio_callback(self, indata, frames, time, status):
         """Callback for audio stream - adds audio to queue."""
         if status:
             print(f"Audio status: {status}", file=sys.stderr)
         self.audio_queue.put(indata.copy())
+
+    def _on_hotkey_pressed(self):
+        """Called when activation hotkey is pressed."""
+        logger.info("Hotkey activation triggered")
+        self.hotkey_triggered.set()
 
     def _audio_to_wav_bytes(self, audio_data: np.ndarray) -> bytes:
         """Convert numpy audio array to WAV bytes."""
@@ -372,6 +465,9 @@ class Claudette:
         """Transcribe audio using local or remote Whisper."""
         audio_duration = len(audio_data) / self.sample_rate
         logger.info(f"Transcribing {audio_duration:.2f}s of audio ({self.whisper_mode} mode)...")
+
+        # Apply audio processing (noise reduction, filtering)
+        audio_data = self.audio_processor.process(audio_data)
 
         if self.whisper_mode == "local":
             return self._transcribe_local(audio_data)
@@ -555,7 +651,7 @@ class Claudette:
 
         try:
             # Build the full prompt with personality and conversation context
-            prompt_parts = [CLAUDETTE_SYSTEM_PROMPT]
+            prompt_parts = [self.system_prompt]
 
             # Add conversation memory context if available
             if self.memory and self.memory.exchanges:
@@ -589,12 +685,15 @@ class Claudette:
             return response
         except FileNotFoundError:
             logger.error("Claude CLI not found")
+            self.sounds.play_error()
             return "I'm terribly sorry, sir, but it seems the Claude service isn't available at the moment."
         except subprocess.TimeoutExpired:
             logger.error("Claude CLI timed out")
+            self.sounds.play_error()
             return "My apologies, sir. That request took rather longer than expected."
         except Exception as e:
             logger.error(f"Claude CLI error: {e}")
+            self.sounds.play_error()
             return f"I'm afraid something went wrong, sir. Technical difficulties, you understand."
 
     def _detect_speech_segment(self) -> np.ndarray | None:
@@ -637,6 +736,7 @@ class Claudette:
                     if is_speech:
                         if not speech_detected:
                             self._update_state(VoiceState.RECORDING)
+                            self.sounds.play_record()
                         speech_detected = True
                         speech_chunks += 1
                         silence_chunks = 0
@@ -716,32 +816,12 @@ class Claudette:
             self._execute_and_respond(transcription)
             return
 
-        # Check for wake word - include common Whisper transcription variations
-        wake_word_variants = [
-            self.wake_word,      # claudette
-            "claudet",           # common mishearing
-            "claudia",           # similar name
-            "clodette",          # accent variation
-            "cladette",          # mishearing
-            "cloud",             # sometimes heard as
-            "claud",             # partial
-            "audit",             # stuffy nose / mishearing
-            "audette",           # mishearing
-            "kladette",          # accent
-            "klodette",          # accent
-            "plot it",           # mishearing
-            "godette",           # mishearing
-            "colette",           # similar name
-            "clodet",            # mishearing
-            "clawed",            # mishearing
-            "plaudit",           # mishearing
-            "hey claudette",     # with hey prefix
-            "hey claudet",       # with hey prefix
-            "okay claudette",    # with okay prefix
-            "laudette",          # dropped 'c' mishearing
-            "lodette",           # mishearing
-            "la dette",          # split mishearing
-        ]
+        # Check for wake word - combine configured and default variants
+        wake_word_variants = [self.wake_word]
+        wake_word_variants.extend(self.wake_word_variants)  # User-configured variants
+        wake_word_variants.extend(self.default_wake_variants)  # Default variants
+        # Remove duplicates while preserving order
+        wake_word_variants = list(dict.fromkeys(wake_word_variants))
 
         command = None
         wake_word_found = False
@@ -771,6 +851,8 @@ class Claudette:
 
         logger.info(f"Wake word detected: '{matched_variant}', extracted command: '{command}'")
         print(f"   ✓ Wake word detected: '{matched_variant}'")
+        self.sounds.play_wake()
+        self.notifications.notify_wake()
 
         if not command or len(command) < 2:
             # Just the wake word - respond and listen for command
@@ -814,6 +896,16 @@ class Claudette:
             print("   (Conversation mode: say follow-up or 'thank you' to end)")
             return
 
+        # Check network connectivity
+        if not self.offline.is_online():
+            logger.warning("Offline - using fallback response")
+            offline_response = self.offline.get_offline_response(command)
+            if offline_response:
+                self._speak(offline_response)
+                self.conversation_mode = True
+                print("   (Offline mode - limited functionality)")
+                return
+
         # Run Claude and TTS acknowledgment in parallel
         # Start Claude in background
         claude_future = executor.submit(self._execute_claude, command)
@@ -823,11 +915,13 @@ class Claudette:
 
         # Wait for Claude's response
         self._update_state(VoiceState.THINKING)
+        self.sounds.play_process()
         response = claude_future.result()
 
         if response:
             # Generate TTS for response
             self._speak(response)
+            self.sounds.play_done()
 
             # Check if response is asking for permission/confirmation
             response_lower = response.lower()
@@ -857,14 +951,27 @@ class Claudette:
         print("=" * 60)
         print(f"Wake word: '{self.wake_word.capitalize()}'")
         print(f"Voice: {self.tts_voice}")
+        if self.hotkey_manager.enabled:
+            print(f"Hotkey: {self.hotkey_manager.hotkey}")
         print("Press Ctrl+C to exit")
         print("=" * 60 + "\n")
 
+        # Start hotkey listener
+        self.hotkey_manager.start()
+
+        # Start system tray
+        self.tray.start()
+        self.waveform.start()
+
         # Greeting
         self._speak("Good day, sir. Claudette at your service.")
+        self.notifications.notify_started()
 
         def signal_handler(sig, frame):
             print("\n")
+            self.hotkey_manager.stop()
+            self.tray.stop()
+            self.waveform.stop()
             self._speak("Goodbye, sir. It's been a pleasure.")
             self.running = False
             sys.exit(0)
@@ -882,6 +989,32 @@ class Claudette:
             self._update_state(VoiceState.LISTENING)
 
             while self.running:
+                # Check for hotkey activation
+                if self.hotkey_triggered.is_set():
+                    self.hotkey_triggered.clear()
+                    logger.info("Hotkey triggered - listening for command")
+                    print("\n🎹 Hotkey activated!")
+                    self.sounds.play_wake()
+                    self._speak("Yes, sir?")
+
+                    # Clear audio queue
+                    while not self.audio_queue.empty():
+                        try:
+                            self.audio_queue.get_nowait()
+                        except queue.Empty:
+                            break
+
+                    # Listen for command (like active listening after wake word)
+                    self._update_state(VoiceState.RECORDING)
+                    command_audio = self._detect_speech_segment()
+                    if command_audio is not None and len(command_audio) > 0:
+                        self._update_state(VoiceState.PROCESSING)
+                        command = self._transcribe(command_audio)
+                        if command:
+                            print(f"\n👂 Command: {command}")
+                            self._execute_and_respond(command)
+                    continue
+
                 audio = self._detect_speech_segment()
 
                 if audio is not None and len(audio) > 0:

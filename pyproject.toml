@@ -51,15 +51,34 @@ dependencies = [
 local = [
     "faster-whisper>=1.0.0",
 ]
+hotkey = [
+    "pynput>=1.7.6",
+]
+system = [
+    "psutil>=5.9.0",
+]
+tray = [
+    "pystray>=0.19.0",
+    "pillow>=9.0.0",
+]
+notifications = [
+    "plyer>=2.1.0",
+]
+audio = [
+    "noisereduce>=2.0.0",
+    "scipy>=1.10.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
 ]
 all = [
-    "claudette-voice[local,dev]",
+    "claudette-voice[local,hotkey,system,tray,notifications,audio,dev]",
 ]
 
 [project.scripts]
@@ -77,8 +96,12 @@ packages = ["src/claudette"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/src",
-    "/config.yaml",
+    "/config.yaml.example",
     "/logo.png",
+    "/README.md",
+    "/LICENSE",
+    "/CONTRIBUTING.md",
+    "/CLAUDE.md",
 ]
 
 [tool.black]
