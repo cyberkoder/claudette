@@ -52,3 +52,9 @@ tts:
   voice: "en-GB-SoniaNeural"
   rate: "+0%"              # Speech rate: -50% to +100%
   pitch: "+0Hz"            # Pitch adjustment: -50Hz to +50Hz
+
+memory:
+  # Conversation memory settings
+  enabled: true                    # Enable conversation memory
+  max_exchanges: 20                # Maximum exchanges to remember
+  # file: "~/.claudette_memory.json"  # Custom memory file location

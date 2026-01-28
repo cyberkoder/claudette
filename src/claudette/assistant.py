@@ -9,6 +9,7 @@ Wake word: "Claudette" -> responds "Yes, sir?"
 import asyncio
 import concurrent.futures
 import io
+import json
 import logging
 import os
 import queue
@@ -20,6 +21,7 @@ import threading
 import wave
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import edge_tts
 import numpy as np
@@ -105,6 +107,70 @@ class VoiceState:
     SPEAKING = "🗣️  Speaking..."
 
 
+class ConversationMemory:
+    """Persistent conversation memory for context across sessions."""
+
+    def __init__(self, memory_file: Optional[Path] = None, max_exchanges: int = 20):
+        self.memory_file = memory_file or Path.cwd() / ".claudette_memory.json"
+        self.max_exchanges = max_exchanges
+        self.exchanges: list[dict] = []
+        self._load()
+
+    def _load(self):
+        """Load conversation history from file."""
+        if self.memory_file.exists():
+            try:
+                with open(self.memory_file, "r") as f:
+                    data = json.load(f)
+                    self.exchanges = data.get("exchanges", [])[-self.max_exchanges:]
+                    logger.debug(f"Loaded {len(self.exchanges)} exchanges from memory")
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load memory: {e}")
+                self.exchanges = []
+
+    def _save(self):
+        """Save conversation history to file."""
+        try:
+            with open(self.memory_file, "w") as f:
+                json.dump({
+                    "exchanges": self.exchanges[-self.max_exchanges:],
+                    "last_updated": datetime.now().isoformat()
+                }, f, indent=2)
+        except IOError as e:
+            logger.warning(f"Failed to save memory: {e}")
+
+    def add_exchange(self, user_input: str, assistant_response: str):
+        """Add a conversation exchange to memory."""
+        self.exchanges.append({
+            "timestamp": datetime.now().isoformat(),
+            "user": user_input,
+            "assistant": assistant_response
+        })
+        # Trim to max size
+        self.exchanges = self.exchanges[-self.max_exchanges:]
+        self._save()
+        logger.debug(f"Saved exchange, total: {len(self.exchanges)}")
+
+    def get_context(self, num_recent: int = 5) -> str:
+        """Get recent conversation context for prompting."""
+        recent = self.exchanges[-num_recent:]
+        if not recent:
+            return ""
+
+        context_parts = ["Here is our recent conversation for context:"]
+        for ex in recent:
+            context_parts.append(f"User: {ex['user']}")
+            context_parts.append(f"Claudette: {ex['assistant']}")
+
+        return "\n".join(context_parts)
+
+    def clear(self):
+        """Clear conversation history."""
+        self.exchanges = []
+        self._save()
+        logger.info("Conversation memory cleared")
+
+
 class Claudette:
     def __init__(self, config_path: str = "config.yaml"):
         self.config = self._load_config(config_path)
@@ -152,6 +218,19 @@ class Claudette:
         self.conversation_timeout = 10.0  # seconds to wait for follow-up
         self.last_command = None  # Track last command for follow-ups
         self.awaiting_confirmation = False  # Track if waiting for yes/no
+
+        # Conversation memory for context across sessions
+        memory_config = self.config.get("memory", {})
+        if memory_config.get("enabled", True):
+            memory_file = memory_config.get("file")
+            if memory_file:
+                memory_file = Path(memory_file).expanduser()
+            max_exchanges = memory_config.get("max_exchanges", 20)
+            self.memory = ConversationMemory(memory_file, max_exchanges)
+            logger.info(f"Conversation memory enabled ({len(self.memory.exchanges)} exchanges loaded)")
+        else:
+            self.memory = None
+            logger.info("Conversation memory disabled")
 
         # Initialize VAD model
         self._init_vad()
@@ -465,8 +544,17 @@ class Claudette:
         self._update_state(VoiceState.THINKING)
 
         try:
-            # Build the full prompt with personality
-            full_prompt = f"{CLAUDETTE_SYSTEM_PROMPT}\n\nUser: {command}"
+            # Build the full prompt with personality and conversation context
+            prompt_parts = [CLAUDETTE_SYSTEM_PROMPT]
+
+            # Add conversation memory context if available
+            if self.memory and self.memory.exchanges:
+                context = self.memory.get_context(num_recent=5)
+                if context:
+                    prompt_parts.append(context)
+
+            prompt_parts.append(f"User: {command}")
+            full_prompt = "\n\n".join(prompt_parts)
             logger.debug(f"Full prompt length: {len(full_prompt)} chars")
 
             start_time = datetime.now()
@@ -483,6 +571,10 @@ class Claudette:
 
             if result.stderr:
                 logger.warning(f"Claude stderr: {result.stderr}")
+
+            # Save to conversation memory
+            if self.memory and response:
+                self.memory.add_exchange(command, response)
 
             return response
         except FileNotFoundError:
