@@ -2,11 +2,29 @@
 # Copy this file to config.yaml and customize for your setup
 
 whisper:
+  # Mode: "local" (faster-whisper) or "remote" (API server)
+  mode: "local"
+
+  # Local Whisper settings (when mode: "local")
+  # Models: tiny, base, small, medium, large-v2, large-v3
+  # Smaller = faster, larger = more accurate
+  model: "base"
+
+  # Device: "auto", "cuda", or "cpu"
+  # auto will use CUDA if available
+  device: "auto"
+
+  # Compute type: float16, int8_float16, int8 (for faster inference)
+  compute_type: "float16"
+
+  # Remote Whisper settings (when mode: "remote")
   # URL of your Whisper ASR server
   # Popular options:
   #   - faster-whisper-server: https://github.com/fedirz/faster-whisper-server
   #   - whisper.cpp server: https://github.com/ggerganov/whisper.cpp
   url: "http://localhost:9300/asr"
+
+  # Language for transcription
   language: "en"
 
 audio:

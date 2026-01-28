@@ -29,6 +29,14 @@ import sounddevice as sd
 import torch
 import yaml
 
+# Optional: faster-whisper for local transcription
+try:
+    from faster_whisper import WhisperModel
+    FASTER_WHISPER_AVAILABLE = True
+except ImportError:
+    FASTER_WHISPER_AVAILABLE = False
+    WhisperModel = None
+
 
 # Set up logging - use current working directory for logs
 log_dir = Path.cwd() / "logs"
@@ -114,8 +122,14 @@ class Claudette:
         self.silence_duration = self.config["vad"]["silence_duration"]
 
         # Whisper settings
-        self.whisper_url = self.config["whisper"]["url"]
-        self.whisper_language = self.config["whisper"]["language"]
+        self.whisper_mode = self.config.get("whisper", {}).get("mode", "remote")
+        self.whisper_url = self.config.get("whisper", {}).get("url", "http://localhost:9300/asr")
+        self.whisper_language = self.config.get("whisper", {}).get("language", "en")
+        self.whisper_model = None
+
+        # Initialize local Whisper if configured
+        if self.whisper_mode == "local":
+            self._init_whisper()
 
         # Wake word
         self.wake_word = self.config.get("wake_word", "claudette").lower()
@@ -168,6 +182,35 @@ class Claudette:
 
         logger.info("VAD model loaded successfully")
         self._print_status("VAD model loaded")
+
+    def _init_whisper(self):
+        """Initialize local Whisper model."""
+        if not FASTER_WHISPER_AVAILABLE:
+            logger.error("faster-whisper not installed. Install with: pip install faster-whisper")
+            raise ImportError("faster-whisper is required for local mode")
+
+        model_name = self.config.get("whisper", {}).get("model", "base")
+        device = self.config.get("whisper", {}).get("device", "auto")
+        compute_type = self.config.get("whisper", {}).get("compute_type", "float16")
+
+        # Handle device selection
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            # Adjust compute type for CPU
+            if device == "cpu" and compute_type == "float16":
+                compute_type = "int8"
+
+        logger.info(f"Loading Whisper model '{model_name}' on {device} ({compute_type})...")
+        self._print_status(f"Loading Whisper model ({model_name})...")
+
+        self.whisper_model = WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute_type
+        )
+
+        logger.info("Whisper model loaded successfully")
+        self._print_status("Whisper model loaded")
 
     def _precache_phrases(self):
         """Pre-generate audio for common phrases."""
@@ -226,10 +269,45 @@ class Claudette:
         return buffer.read()
 
     def _transcribe(self, audio_data: np.ndarray) -> str:
-        """Send audio to NAS Whisper and get transcription."""
+        """Transcribe audio using local or remote Whisper."""
         audio_duration = len(audio_data) / self.sample_rate
-        logger.info(f"Transcribing {audio_duration:.2f}s of audio...")
+        logger.info(f"Transcribing {audio_duration:.2f}s of audio ({self.whisper_mode} mode)...")
 
+        if self.whisper_mode == "local":
+            return self._transcribe_local(audio_data)
+        else:
+            return self._transcribe_remote(audio_data)
+
+    def _transcribe_local(self, audio_data: np.ndarray) -> str:
+        """Transcribe using local faster-whisper model."""
+        try:
+            start_time = datetime.now()
+
+            # faster-whisper expects float32 audio
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
+
+            # Transcribe
+            segments, info = self.whisper_model.transcribe(
+                audio_data,
+                language=self.whisper_language,
+                beam_size=5,
+                vad_filter=True
+            )
+
+            # Collect all segments
+            result = " ".join(segment.text for segment in segments).strip()
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Transcription ({elapsed:.2f}s): '{result}'")
+            return result
+
+        except Exception as e:
+            logger.error(f"Local Whisper error: {e}")
+            return ""
+
+    def _transcribe_remote(self, audio_data: np.ndarray) -> str:
+        """Transcribe using remote Whisper API server."""
         wav_bytes = self._audio_to_wav_bytes(audio_data)
         logger.debug(f"WAV size: {len(wav_bytes)} bytes")
 
