@@ -13,6 +13,7 @@ logger = logging.getLogger("claudette")
 # Try to import pynput for cross-platform hotkey support
 try:
     from pynput import keyboard
+
     PYNPUT_AVAILABLE = True
 except ImportError:
     PYNPUT_AVAILABLE = False
@@ -26,7 +27,7 @@ class HotkeyManager:
         self,
         enabled: bool = True,
         hotkey: str = "<ctrl>+<shift>+c",
-        callback: Optional[Callable] = None
+        callback: Optional[Callable] = None,
     ):
         self.enabled = enabled and PYNPUT_AVAILABLE
         self.hotkey = hotkey
@@ -35,8 +36,9 @@ class HotkeyManager:
         self._running = False
 
         if enabled and not PYNPUT_AVAILABLE:
-            logger.warning("Hotkey support disabled: pynput not installed. "
-                          "Install with: pip install pynput")
+            logger.warning(
+                "Hotkey support disabled: pynput not installed. " "Install with: pip install pynput"
+            )
 
     def _parse_hotkey(self, hotkey_str: str) -> set:
         """Parse hotkey string into pynput key set."""
@@ -85,9 +87,7 @@ class HotkeyManager:
 
         try:
             # Create hotkey listener
-            self._listener = keyboard.GlobalHotKeys({
-                self.hotkey: self._on_hotkey
-            })
+            self._listener = keyboard.GlobalHotKeys({self.hotkey: self._on_hotkey})
             self._listener.start()
             self._running = True
             logger.info(f"Hotkey listener started: {self.hotkey}")
@@ -111,6 +111,7 @@ class HotkeyManager:
 def get_default_hotkey() -> str:
     """Get platform-appropriate default hotkey."""
     import platform
+
     system = platform.system()
 
     if system == "Darwin":  # macOS

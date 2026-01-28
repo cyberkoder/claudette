@@ -34,6 +34,7 @@ import yaml
 # Optional: faster-whisper for local transcription
 try:
     from faster_whisper import WhisperModel
+
     FASTER_WHISPER_AVAILABLE = True
 except ImportError:
     FASTER_WHISPER_AVAILABLE = False
@@ -49,7 +50,6 @@ from .personalities import get_personality, CLAUDETTE_DEFAULT
 from .audio_processing import AudioProcessor
 from .offline import OfflineFallback
 
-
 # Set up logging - use current working directory for logs
 log_dir = Path.cwd() / "logs"
 log_dir.mkdir(exist_ok=True)
@@ -57,12 +57,9 @@ log_file = log_dir / f"claudette_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s | %(levelname)-8s | %(message)s',
-    datefmt='%H:%M:%S',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%H:%M:%S",
+    handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("claudette")
 
@@ -74,9 +71,9 @@ logging.getLogger("pygame").setLevel(logging.WARNING)
 def find_config_file(config_name: str = "config.yaml") -> Path:
     """Find config file in standard locations."""
     search_paths = [
-        Path.cwd() / config_name,                          # Current directory
+        Path.cwd() / config_name,  # Current directory
         Path.home() / ".config" / "claudette" / config_name,  # User config
-        Path(__file__).parent.parent.parent / config_name,    # Package root
+        Path(__file__).parent.parent.parent / config_name,  # Package root
     ]
 
     for path in search_paths:
@@ -86,6 +83,7 @@ def find_config_file(config_name: str = "config.yaml") -> Path:
 
     # Return default path (will error if not found)
     return search_paths[0]
+
 
 # Thread pool for parallel operations
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
@@ -97,6 +95,7 @@ CLAUDETTE_SYSTEM_PROMPT = CLAUDETTE_DEFAULT
 
 class VoiceState:
     """Visual state indicators for the terminal."""
+
     LISTENING = "🎤 Listening for 'Claudette'..."
     LISTENING_CONVO = "💬 Listening (conversation active)..."
     RECORDING = "🔴 Recording..."
@@ -120,7 +119,7 @@ class ConversationMemory:
             try:
                 with open(self.memory_file, "r") as f:
                     data = json.load(f)
-                    self.exchanges = data.get("exchanges", [])[-self.max_exchanges:]
+                    self.exchanges = data.get("exchanges", [])[-self.max_exchanges :]
                     logger.debug(f"Loaded {len(self.exchanges)} exchanges from memory")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Failed to load memory: {e}")
@@ -130,22 +129,28 @@ class ConversationMemory:
         """Save conversation history to file."""
         try:
             with open(self.memory_file, "w") as f:
-                json.dump({
-                    "exchanges": self.exchanges[-self.max_exchanges:],
-                    "last_updated": datetime.now().isoformat()
-                }, f, indent=2)
+                json.dump(
+                    {
+                        "exchanges": self.exchanges[-self.max_exchanges :],
+                        "last_updated": datetime.now().isoformat(),
+                    },
+                    f,
+                    indent=2,
+                )
         except IOError as e:
             logger.warning(f"Failed to save memory: {e}")
 
     def add_exchange(self, user_input: str, assistant_response: str):
         """Add a conversation exchange to memory."""
-        self.exchanges.append({
-            "timestamp": datetime.now().isoformat(),
-            "user": user_input,
-            "assistant": assistant_response
-        })
+        self.exchanges.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "user": user_input,
+                "assistant": assistant_response,
+            }
+        )
         # Trim to max size
-        self.exchanges = self.exchanges[-self.max_exchanges:]
+        self.exchanges = self.exchanges[-self.max_exchanges :]
         self._save()
         logger.debug(f"Saved exchange, total: {len(self.exchanges)}")
 
@@ -208,10 +213,28 @@ class Claudette:
 
         # Default variants for common transcription errors
         self.default_wake_variants = [
-            "claudet", "claudia", "clodette", "cladette", "cloud", "claud",
-            "audit", "audette", "kladette", "klodette", "plot it", "godette",
-            "colette", "clodet", "clawed", "plaudit", "laudette", "lodette",
-            "la dette", "hey claudette", "hey claudet", "okay claudette"
+            "claudet",
+            "claudia",
+            "clodette",
+            "cladette",
+            "cloud",
+            "claud",
+            "audit",
+            "audette",
+            "kladette",
+            "klodette",
+            "plot it",
+            "godette",
+            "colette",
+            "clodet",
+            "clawed",
+            "plaudit",
+            "laudette",
+            "lodette",
+            "la dette",
+            "hey claudette",
+            "hey claudet",
+            "okay claudette",
         ]
 
         # TTS settings - British English female voice
@@ -252,7 +275,9 @@ class Claudette:
                 memory_file = Path(memory_file).expanduser()
             max_exchanges = memory_config.get("max_exchanges", 20)
             self.memory = ConversationMemory(memory_file, max_exchanges)
-            logger.info(f"Conversation memory enabled ({len(self.memory.exchanges)} exchanges loaded)")
+            logger.info(
+                f"Conversation memory enabled ({len(self.memory.exchanges)} exchanges loaded)"
+            )
         else:
             self.memory = None
             logger.info("Conversation memory disabled")
@@ -267,8 +292,7 @@ class Claudette:
         # Initialize sound effects
         sounds_config = self.config.get("sounds", {})
         self.sounds = SoundEffects(
-            enabled=sounds_config.get("enabled", True),
-            volume=sounds_config.get("volume", 0.3)
+            enabled=sounds_config.get("enabled", True), volume=sounds_config.get("volume", 0.3)
         )
 
         # Initialize hotkey support
@@ -277,7 +301,7 @@ class Claudette:
         self.hotkey_manager = HotkeyManager(
             enabled=hotkey_config.get("enabled", True),
             hotkey=hotkey_config.get("key", get_default_hotkey()),
-            callback=self._on_hotkey_pressed
+            callback=self._on_hotkey_pressed,
         )
 
         # Initialize system tray
@@ -285,13 +309,11 @@ class Claudette:
         self.tray = TrayIcon(
             enabled=tray_config.get("enabled", True),
             on_activate=self._on_hotkey_pressed,
-            on_quit=self._shutdown
+            on_quit=self._shutdown,
         )
 
         # Initialize waveform window (optional)
-        self.waveform = WaveformWindow(
-            enabled=tray_config.get("waveform", False)
-        )
+        self.waveform = WaveformWindow(enabled=tray_config.get("waveform", False))
 
         # Initialize desktop notifications
         notify_config = self.config.get("notifications", {})
@@ -305,14 +327,12 @@ class Claudette:
             sample_rate=self.sample_rate,
             noise_reduce=audio_processing_config.get("noise_reduce", True),
             high_pass_cutoff=audio_processing_config.get("high_pass_cutoff", 80.0),
-            normalize=audio_processing_config.get("normalize", True)
+            normalize=audio_processing_config.get("normalize", True),
         )
 
         # Initialize offline fallback
         offline_config = self.config.get("offline", {})
-        self.offline = OfflineFallback(
-            enabled=offline_config.get("enabled", True)
-        )
+        self.offline = OfflineFallback(enabled=offline_config.get("enabled", True))
 
         # Initialize VAD model
         self._init_vad()
@@ -343,7 +363,7 @@ class Claudette:
             model="silero_vad",
             force_reload=False,
             onnx=False,
-            trust_repo=True
+            trust_repo=True,
         )
 
         # Move model to appropriate device
@@ -375,11 +395,7 @@ class Claudette:
         logger.info(f"Loading Whisper model '{model_name}' on {device} ({compute_type})...")
         self._print_status(f"Loading Whisper model ({model_name})...")
 
-        self.whisper_model = WhisperModel(
-            model_name,
-            device=device,
-            compute_type=compute_type
-        )
+        self.whisper_model = WhisperModel(model_name, device=device, compute_type=compute_type)
 
         logger.info("Whisper model loaded successfully")
         self._print_status("Whisper model loaded")
@@ -485,10 +501,7 @@ class Claudette:
 
             # Transcribe
             segments, info = self.whisper_model.transcribe(
-                audio_data,
-                language=self.whisper_language,
-                beam_size=5,
-                vad_filter=True
+                audio_data, language=self.whisper_language, beam_size=5, vad_filter=True
             )
 
             # Collect all segments
@@ -512,12 +525,7 @@ class Claudette:
 
         try:
             start_time = datetime.now()
-            response = requests.post(
-                self.whisper_url,
-                files=files,
-                params=params,
-                timeout=30
-            )
+            response = requests.post(self.whisper_url, files=files, params=params, timeout=30)
             elapsed = (datetime.now() - start_time).total_seconds()
             response.raise_for_status()
             result = response.text.strip()
@@ -531,10 +539,7 @@ class Claudette:
     async def _synthesize_speech(self, text: str) -> bytes:
         """Convert text to speech using edge-tts."""
         communicate = edge_tts.Communicate(
-            text,
-            self.tts_voice,
-            rate=self.tts_rate,
-            pitch=self.tts_pitch
+            text, self.tts_voice, rate=self.tts_rate, pitch=self.tts_pitch
         )
 
         audio_data = b""
@@ -547,8 +552,9 @@ class Claudette:
     def _split_into_sentences(self, text: str) -> list[str]:
         """Split text into sentences for streaming TTS."""
         import re
+
         # Split on sentence-ending punctuation, keeping the punctuation
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r"(?<=[.!?])\s+", text)
         # Filter out empty strings and strip whitespace
         return [s.strip() for s in sentences if s.strip()]
 
@@ -665,15 +671,14 @@ class Claudette:
 
             start_time = datetime.now()
             result = subprocess.run(
-                ["claude", "-p", full_prompt],
-                capture_output=True,
-                text=True,
-                timeout=60
+                ["claude", "-p", full_prompt], capture_output=True, text=True, timeout=60
             )
             elapsed = (datetime.now() - start_time).total_seconds()
 
             response = result.stdout.strip()
-            logger.info(f"Claude response ({elapsed:.2f}s): '{response[:100]}...' ({len(response)} chars)")
+            logger.info(
+                f"Claude response ({elapsed:.2f}s): '{response[:100]}...' ({len(response)} chars)"
+            )
 
             if result.stderr:
                 logger.warning(f"Claude stderr: {result.stderr}")
@@ -726,10 +731,7 @@ class Claudette:
                     if self.vad_device == "cuda":
                         vad_tensor = vad_tensor.to(self.vad_device)
 
-                    speech_prob = self.vad_model(
-                        vad_tensor,
-                        self.sample_rate
-                    ).item()
+                    speech_prob = self.vad_model(vad_tensor, self.sample_rate).item()
 
                     is_speech = speech_prob >= self.vad_threshold
 
@@ -774,11 +776,21 @@ class Claudette:
         transcription_lower = transcription.lower().strip()
         logger.info(f"Processing transcription: '{transcription}'")
         logger.debug(f"Lowercase: '{transcription_lower}'")
-        logger.debug(f"Conversation mode: {self.conversation_mode}, Awaiting confirmation: {self.awaiting_confirmation}")
+        logger.debug(
+            f"Conversation mode: {self.conversation_mode}, Awaiting confirmation: {self.awaiting_confirmation}"
+        )
         print(f"\n👂 Heard: {transcription}")
 
         # Check for conversation-ending phrases
-        end_phrases = ["thank you", "thanks", "that's all", "goodbye", "bye", "nevermind", "never mind"]
+        end_phrases = [
+            "thank you",
+            "thanks",
+            "that's all",
+            "goodbye",
+            "bye",
+            "nevermind",
+            "never mind",
+        ]
         for phrase in end_phrases:
             if phrase in transcription_lower:
                 if self.conversation_mode:
@@ -788,7 +800,18 @@ class Claudette:
                     return
 
         # Check for confirmation/permission responses
-        affirmative = ["yes", "yeah", "yep", "go ahead", "do it", "proceed", "please do", "approved", "confirmed", "affirmative"]
+        affirmative = [
+            "yes",
+            "yeah",
+            "yep",
+            "go ahead",
+            "do it",
+            "proceed",
+            "please do",
+            "approved",
+            "confirmed",
+            "affirmative",
+        ]
         negative = ["no", "nope", "don't", "stop", "cancel", "abort", "negative"]
 
         if self.conversation_mode and self.awaiting_confirmation:
@@ -836,9 +859,11 @@ class Claudette:
                     wake_word_found = True
                     matched_variant = variant
                     # Extract command - find where the wake word ends
-                    command = transcription[len(pattern):].strip()
+                    command = transcription[len(pattern) :].strip()
                     command = command.lstrip(",.!? ")
-                    logger.info(f"Wake word MATCH: variant='{variant}', pattern='{pattern}', command='{command}'")
+                    logger.info(
+                        f"Wake word MATCH: variant='{variant}', pattern='{pattern}', command='{command}'"
+                    )
                     break
             if wake_word_found:
                 break
@@ -926,10 +951,17 @@ class Claudette:
             # Check if response is asking for permission/confirmation
             response_lower = response.lower()
             permission_indicators = [
-                "shall i", "should i", "would you like me to",
-                "do you want me to", "may i", "can i proceed",
-                "would you like", "do you approve", "is that okay",
-                "confirm", "permission"
+                "shall i",
+                "should i",
+                "would you like me to",
+                "do you want me to",
+                "may i",
+                "can i proceed",
+                "would you like",
+                "do you approve",
+                "is that okay",
+                "confirm",
+                "permission",
             ]
             for indicator in permission_indicators:
                 if indicator in response_lower:
@@ -984,7 +1016,7 @@ class Claudette:
             channels=self.channels,
             dtype=np.float32,
             blocksize=512,
-            callback=self._audio_callback
+            callback=self._audio_callback,
         ):
             self._update_state(VoiceState.LISTENING)
 

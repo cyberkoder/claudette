@@ -18,9 +18,20 @@ from .audio_processing import AudioProcessor
 from .offline import OfflineFallback, check_network
 
 __all__ = [
-    "Claudette", "main", "Skill", "SkillManager", "SoundEffects",
-    "HotkeyManager", "TrayIcon", "WaveformWindow", "NotificationManager",
-    "PERSONALITIES", "get_personality", "list_personalities", "AudioProcessor",
-    "OfflineFallback", "check_network",
-    "__version__"
+    "Claudette",
+    "main",
+    "Skill",
+    "SkillManager",
+    "SoundEffects",
+    "HotkeyManager",
+    "TrayIcon",
+    "WaveformWindow",
+    "NotificationManager",
+    "PERSONALITIES",
+    "get_personality",
+    "list_personalities",
+    "AudioProcessor",
+    "OfflineFallback",
+    "check_network",
+    "__version__",
 ]

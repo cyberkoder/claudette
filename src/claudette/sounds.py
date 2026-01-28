@@ -26,11 +26,7 @@ class SoundEffects:
             logger.info("Sound effects initialized")
 
     def _generate_tone(
-        self,
-        frequency: float,
-        duration: float,
-        sample_rate: int = 44100,
-        fade_ms: int = 20
+        self, frequency: float, duration: float, sample_rate: int = 44100, fade_ms: int = 20
     ) -> np.ndarray:
         """Generate a sine wave tone."""
         t = np.linspace(0, duration, int(sample_rate * duration), False)
@@ -71,7 +67,7 @@ class SoundEffects:
         """Convert numpy array to pygame Sound."""
         # Create WAV in memory
         buffer = io.BytesIO()
-        with wave.open(buffer, 'wb') as wav:
+        with wave.open(buffer, "wb") as wav:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(sample_rate)
@@ -85,27 +81,29 @@ class SoundEffects:
         try:
             # Wake word detected - pleasant ascending chime
             wake_audio = self._generate_chime([523, 659, 784], 0.12)  # C5, E5, G5
-            self._sounds['wake'] = self._array_to_sound(wake_audio)
+            self._sounds["wake"] = self._array_to_sound(wake_audio)
 
             # Recording started - soft low tone
             record_audio = self._generate_tone(440, 0.1)  # A4
-            self._sounds['record'] = self._array_to_sound(record_audio)
+            self._sounds["record"] = self._array_to_sound(record_audio)
 
             # Processing/thinking - subtle double beep
-            process_audio = np.concatenate([
-                self._generate_tone(880, 0.05),  # A5
-                np.zeros(500, dtype=np.int16),   # Short gap
-                self._generate_tone(880, 0.05),  # A5
-            ])
-            self._sounds['process'] = self._array_to_sound(process_audio)
+            process_audio = np.concatenate(
+                [
+                    self._generate_tone(880, 0.05),  # A5
+                    np.zeros(500, dtype=np.int16),  # Short gap
+                    self._generate_tone(880, 0.05),  # A5
+                ]
+            )
+            self._sounds["process"] = self._array_to_sound(process_audio)
 
             # Done/success - descending gentle chime
             done_audio = self._generate_chime([784, 659, 523], 0.1)  # G5, E5, C5
-            self._sounds['done'] = self._array_to_sound(done_audio)
+            self._sounds["done"] = self._array_to_sound(done_audio)
 
             # Error - low buzz
             error_audio = self._generate_tone(220, 0.2)  # A3
-            self._sounds['error'] = self._array_to_sound(error_audio)
+            self._sounds["error"] = self._array_to_sound(error_audio)
 
             logger.debug(f"Generated {len(self._sounds)} sound effects")
 
@@ -127,20 +125,20 @@ class SoundEffects:
 
     def play_wake(self):
         """Play wake word detection sound."""
-        self.play('wake')
+        self.play("wake")
 
     def play_record(self):
         """Play recording started sound."""
-        self.play('record')
+        self.play("record")
 
     def play_process(self):
         """Play processing/thinking sound."""
-        self.play('process')
+        self.play("process")
 
     def play_done(self):
         """Play completion sound."""
-        self.play('done')
+        self.play("done")
 
     def play_error(self):
         """Play error sound."""
-        self.play('error')
+        self.play("error")

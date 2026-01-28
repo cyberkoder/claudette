@@ -16,6 +16,7 @@ logger = logging.getLogger("claudette")
 try:
     import pystray
     from PIL import Image, ImageDraw
+
     TRAY_AVAILABLE = True
 except ImportError:
     TRAY_AVAILABLE = False
@@ -29,19 +30,19 @@ class TrayIcon:
 
     # State colors
     COLORS = {
-        "idle": "#4a90d9",      # Blue - listening
-        "listening": "#4a90d9", # Blue - actively listening
-        "recording": "#e74c3c", # Red - recording speech
-        "processing": "#f39c12", # Orange - processing
+        "idle": "#4a90d9",  # Blue - listening
+        "listening": "#4a90d9",  # Blue - actively listening
+        "recording": "#e74c3c",  # Red - recording speech
+        "processing": "#f39c12",  # Orange - processing
         "speaking": "#27ae60",  # Green - speaking
-        "error": "#c0392b",     # Dark red - error
+        "error": "#c0392b",  # Dark red - error
     }
 
     def __init__(
         self,
         enabled: bool = True,
         on_activate: Optional[Callable] = None,
-        on_quit: Optional[Callable] = None
+        on_quit: Optional[Callable] = None,
     ):
         self.enabled = enabled and TRAY_AVAILABLE
         self.on_activate = on_activate
@@ -51,31 +52,33 @@ class TrayIcon:
         self._thread: Optional[threading.Thread] = None
 
         if enabled and not TRAY_AVAILABLE:
-            logger.warning("System tray disabled: pystray or PIL not installed. "
-                          "Install with: pip install pystray pillow")
+            logger.warning(
+                "System tray disabled: pystray or PIL not installed. "
+                "Install with: pip install pystray pillow"
+            )
 
     def _create_icon_image(self, color: str, size: int = 64) -> "Image.Image":
         """Create a tray icon image with the given color."""
         # Create a circular icon with the state color
-        image = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
 
         # Draw outer circle
         margin = 4
         draw.ellipse(
-            [margin, margin, size - margin, size - margin],
-            fill=color,
-            outline="#ffffff",
-            width=2
+            [margin, margin, size - margin, size - margin], fill=color, outline="#ffffff", width=2
         )
 
         # Draw "C" letter in center
         font_size = size // 2
         try:
             from PIL import ImageFont
+
             # Try to use a nice font, fall back to default
             try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                font = ImageFont.truetype(
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
+                )
             except Exception:
                 font = ImageFont.load_default()
         except Exception:
@@ -98,25 +101,12 @@ class TrayIcon:
     def _create_menu(self) -> "pystray.Menu":
         """Create the tray context menu."""
         return pystray.Menu(
-            pystray.MenuItem(
-                "Claudette",
-                None,
-                enabled=False
-            ),
+            pystray.MenuItem("Claudette", None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Activate",
-                self._on_activate_clicked
-            ),
-            pystray.MenuItem(
-                "Status",
-                self._on_status_clicked
-            ),
+            pystray.MenuItem("Activate", self._on_activate_clicked),
+            pystray.MenuItem("Status", self._on_status_clicked),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(
-                "Quit",
-                self._on_quit_clicked
-            ),
+            pystray.MenuItem("Quit", self._on_quit_clicked),
         )
 
     def _on_activate_clicked(self, icon, item):
@@ -159,12 +149,7 @@ class TrayIcon:
             image = self._create_icon_image(self.COLORS["idle"])
             menu = self._create_menu()
 
-            self._icon = pystray.Icon(
-                "claudette",
-                image,
-                "Claudette - Listening",
-                menu
-            )
+            self._icon = pystray.Icon("claudette", image, "Claudette - Listening", menu)
 
             # Run in background thread
             self._thread = threading.Thread(target=self._icon.run, daemon=True)
@@ -198,6 +183,7 @@ class WaveformWindow:
         if enabled:
             try:
                 import tkinter as tk
+
                 self._tk = tk
             except ImportError:
                 logger.warning("Waveform window disabled: tkinter not available")
@@ -213,16 +199,12 @@ class WaveformWindow:
             self._window = self._tk.Tk()
             self._window.title("Claudette")
             self._window.geometry("300x80")
-            self._window.attributes('-topmost', True)
-            self._window.configure(bg='#1a1a2e')
+            self._window.attributes("-topmost", True)
+            self._window.configure(bg="#1a1a2e")
 
             # Create canvas for waveform
             self._canvas = self._tk.Canvas(
-                self._window,
-                width=280,
-                height=60,
-                bg='#1a1a2e',
-                highlightthickness=0
+                self._window, width=280, height=60, bg="#1a1a2e", highlightthickness=0
             )
             self._canvas.pack(pady=10)
 
@@ -255,12 +237,7 @@ class WaveformWindow:
                 points.extend([x, y])
 
             if len(points) >= 4:
-                self._canvas.create_line(
-                    points,
-                    fill='#4a90d9',
-                    width=2,
-                    smooth=True
-                )
+                self._canvas.create_line(points, fill="#4a90d9", width=2, smooth=True)
         except Exception:
             pass
 
@@ -271,6 +248,7 @@ class WaveformWindow:
 
         try:
             import numpy as np
+
             # Downsample to 50 points for display
             if len(audio_samples) > 50:
                 indices = np.linspace(0, len(audio_samples) - 1, 50, dtype=int)

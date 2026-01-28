@@ -12,6 +12,7 @@ logger = logging.getLogger("claudette")
 # Try to import noisereduce for spectral subtraction
 try:
     import noisereduce as nr
+
     NOISEREDUCE_AVAILABLE = True
 except ImportError:
     NOISEREDUCE_AVAILABLE = False
@@ -26,7 +27,7 @@ class AudioProcessor:
         sample_rate: int = 16000,
         noise_reduce: bool = True,
         high_pass_cutoff: float = 80.0,
-        normalize: bool = True
+        normalize: bool = True,
     ):
         self.sample_rate = sample_rate
         self.noise_reduce = noise_reduce and NOISEREDUCE_AVAILABLE
@@ -38,8 +39,10 @@ class AudioProcessor:
         self._noise_sample_count = 0
 
         if noise_reduce and not NOISEREDUCE_AVAILABLE:
-            logger.warning("Noise reduction disabled: noisereduce not installed. "
-                          "Install with: pip install noisereduce")
+            logger.warning(
+                "Noise reduction disabled: noisereduce not installed. "
+                "Install with: pip install noisereduce"
+            )
 
     def _high_pass_filter(self, audio: np.ndarray) -> np.ndarray:
         """Apply a simple high-pass filter to remove low-frequency noise."""
@@ -52,7 +55,7 @@ class AudioProcessor:
             # Design Butterworth high-pass filter
             nyquist = self.sample_rate / 2
             normalized_cutoff = self.high_pass_cutoff / nyquist
-            b, a = butter(4, normalized_cutoff, btype='high')
+            b, a = butter(4, normalized_cutoff, btype="high")
 
             # Apply filter
             return filtfilt(b, a, audio).astype(audio.dtype)
@@ -79,10 +82,7 @@ class AudioProcessor:
         try:
             # Use noisereduce with automatic noise estimation
             reduced = nr.reduce_noise(
-                y=audio,
-                sr=self.sample_rate,
-                stationary=True,
-                prop_decrease=0.75
+                y=audio, sr=self.sample_rate, stationary=True, prop_decrease=0.75
             )
             return reduced.astype(audio.dtype)
 
@@ -156,7 +156,7 @@ def estimate_noise_level(audio: np.ndarray) -> float:
     if audio.dtype == np.int16:
         audio = audio.astype(np.float32) / 32767.0
 
-    rms = np.sqrt(np.mean(audio ** 2))
+    rms = np.sqrt(np.mean(audio**2))
 
     # Normalize to 0-1 range (assuming typical speech RMS is around 0.1-0.3)
     normalized = min(1.0, rms / 0.3)

@@ -35,18 +35,10 @@ class OfflineFallback:
 
     # Canned responses for offline mode
     OFFLINE_RESPONSES = {
-        "greeting": [
-            "hello", "hi", "hey", "good morning", "good afternoon", "good evening"
-        ],
-        "farewell": [
-            "goodbye", "bye", "see you", "later", "good night"
-        ],
-        "thanks": [
-            "thank you", "thanks", "appreciate"
-        ],
-        "status": [
-            "how are you", "are you there", "you okay"
-        ],
+        "greeting": ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"],
+        "farewell": ["goodbye", "bye", "see you", "later", "good night"],
+        "thanks": ["thank you", "thanks", "appreciate"],
+        "status": ["how are you", "are you there", "you okay"],
     }
 
     OFFLINE_REPLIES = {

@@ -69,6 +69,7 @@ class SkillManager:
 
     def _load_builtin_skills(self):
         """Load built-in skills."""
+
         # Time skill
         class TimeSkill(Skill):
             name = "time"
@@ -77,12 +78,17 @@ class SkillManager:
 
             def execute(self, command: str, claudette) -> str:
                 from datetime import datetime
+
                 now = datetime.now()
                 hour = now.hour
                 minute = now.minute
 
                 # Convert to 12-hour format with period
-                period = "in the morning" if hour < 12 else "in the afternoon" if hour < 17 else "in the evening"
+                period = (
+                    "in the morning"
+                    if hour < 12
+                    else "in the afternoon" if hour < 17 else "in the evening"
+                )
                 if hour == 0:
                     hour_12 = 12
                 elif hour > 12:
@@ -105,6 +111,7 @@ class SkillManager:
 
             def execute(self, command: str, claudette) -> str:
                 from datetime import datetime
+
                 now = datetime.now()
                 day_name = now.strftime("%A")
                 month_name = now.strftime("%B")
@@ -139,6 +146,7 @@ class SkillManager:
 
             def execute(self, command: str, claudette) -> str:
                 import torch
+
                 parts = ["All systems operational, sir."]
 
                 # GPU status
@@ -176,8 +184,7 @@ class SkillManager:
                 # Uptime (Linux/macOS)
                 try:
                     result = subprocess.run(
-                        ["uptime", "-p"],
-                        capture_output=True, text=True, timeout=5
+                        ["uptime", "-p"], capture_output=True, text=True, timeout=5
                     )
                     if result.returncode == 0:
                         uptime = result.stdout.strip().replace("up ", "")
@@ -188,6 +195,7 @@ class SkillManager:
                 # Memory usage
                 try:
                     import psutil
+
                     mem = psutil.virtual_memory()
                     used_gb = mem.used / (1024**3)
                     total_gb = mem.total / (1024**3)
@@ -198,6 +206,7 @@ class SkillManager:
                 # CPU usage
                 try:
                     import psutil
+
                     cpu = psutil.cpu_percent(interval=0.5)
                     parts.append(f"CPU is at {cpu:.0f}%.")
                 except ImportError:
@@ -214,6 +223,7 @@ class SkillManager:
             def execute(self, command: str, claudette) -> str:
                 try:
                     import psutil
+
                     battery = psutil.sensors_battery()
                     if battery is None:
                         return "I don't detect a battery, sir. This appears to be a desktop system."
@@ -248,62 +258,114 @@ class SkillManager:
             name = "volume"
             description = "Control system volume"
             triggers = [
-                "volume up", "louder", "turn it up", "increase volume",
-                "volume down", "quieter", "turn it down", "decrease volume",
-                "mute", "unmute", "toggle mute", "silence",
-                "what's the volume", "volume level"
+                "volume up",
+                "louder",
+                "turn it up",
+                "increase volume",
+                "volume down",
+                "quieter",
+                "turn it down",
+                "decrease volume",
+                "mute",
+                "unmute",
+                "toggle mute",
+                "silence",
+                "what's the volume",
+                "volume level",
             ]
 
             def execute(self, command: str, claudette) -> str:
                 import platform
                 import subprocess
+
                 command_lower = command.lower()
                 system = platform.system()
 
                 try:
-                    if "up" in command_lower or "louder" in command_lower or "increase" in command_lower:
+                    if (
+                        "up" in command_lower
+                        or "louder" in command_lower
+                        or "increase" in command_lower
+                    ):
                         if system == "Linux":
-                            subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+10%"], timeout=5)
+                            subprocess.run(
+                                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+10%"], timeout=5
+                            )
                         elif system == "Darwin":
-                            subprocess.run(["osascript", "-e", "set volume output volume (output volume of (get volume settings) + 10)"], timeout=5)
+                            subprocess.run(
+                                [
+                                    "osascript",
+                                    "-e",
+                                    "set volume output volume (output volume of (get volume settings) + 10)",
+                                ],
+                                timeout=5,
+                            )
                         return "Volume increased, sir."
 
-                    elif "down" in command_lower or "quieter" in command_lower or "decrease" in command_lower:
+                    elif (
+                        "down" in command_lower
+                        or "quieter" in command_lower
+                        or "decrease" in command_lower
+                    ):
                         if system == "Linux":
-                            subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-10%"], timeout=5)
+                            subprocess.run(
+                                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-10%"], timeout=5
+                            )
                         elif system == "Darwin":
-                            subprocess.run(["osascript", "-e", "set volume output volume (output volume of (get volume settings) - 10)"], timeout=5)
+                            subprocess.run(
+                                [
+                                    "osascript",
+                                    "-e",
+                                    "set volume output volume (output volume of (get volume settings) - 10)",
+                                ],
+                                timeout=5,
+                            )
                         return "Volume decreased, sir."
 
                     elif "mute" in command_lower or "silence" in command_lower:
                         if "unmute" in command_lower:
                             if system == "Linux":
-                                subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"], timeout=5)
+                                subprocess.run(
+                                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"], timeout=5
+                                )
                             elif system == "Darwin":
-                                subprocess.run(["osascript", "-e", "set volume without output muted"], timeout=5)
+                                subprocess.run(
+                                    ["osascript", "-e", "set volume without output muted"],
+                                    timeout=5,
+                                )
                             return "Unmuted, sir."
                         else:
                             if system == "Linux":
-                                subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"], timeout=5)
+                                subprocess.run(
+                                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+                                    timeout=5,
+                                )
                             elif system == "Darwin":
-                                subprocess.run(["osascript", "-e", "set volume with output muted"], timeout=5)
+                                subprocess.run(
+                                    ["osascript", "-e", "set volume with output muted"], timeout=5
+                                )
                             return "Muted, sir."
 
                     elif "level" in command_lower or "what" in command_lower:
                         if system == "Linux":
                             result = subprocess.run(
                                 ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
-                                capture_output=True, text=True, timeout=5
+                                capture_output=True,
+                                text=True,
+                                timeout=5,
                             )
                             # Parse output like "Volume: front-left: 65536 / 100%..."
                             import re
-                            match = re.search(r'(\d+)%', result.stdout)
+
+                            match = re.search(r"(\d+)%", result.stdout)
                             if match:
                                 return f"Volume is at {match.group(1)}%, sir."
                         elif system == "Darwin":
                             result = subprocess.run(
                                 ["osascript", "-e", "output volume of (get volume settings)"],
-                                capture_output=True, text=True, timeout=5
+                                capture_output=True,
+                                text=True,
+                                timeout=5,
                             )
                             return f"Volume is at {result.stdout.strip()}%, sir."
                         return "I couldn't determine the volume level, sir."
@@ -323,22 +385,31 @@ class SkillManager:
             def execute(self, command: str, claudette) -> str:
                 import platform
                 import subprocess
+
                 system = platform.system()
 
                 try:
                     if system == "Linux":
                         # Try common Linux screen lockers
-                        for locker in ["gnome-screensaver-command -l", "xdg-screensaver lock", "loginctl lock-session"]:
+                        for locker in [
+                            "gnome-screensaver-command -l",
+                            "xdg-screensaver lock",
+                            "loginctl lock-session",
+                        ]:
                             try:
                                 subprocess.run(locker.split(), timeout=5)
                                 return "Locking the screen, sir."
                             except Exception:
                                 continue
                     elif system == "Darwin":
-                        subprocess.run([
-                            "osascript", "-e",
-                            'tell application "System Events" to keystroke "q" using {control down, command down}'
-                        ], timeout=5)
+                        subprocess.run(
+                            [
+                                "osascript",
+                                "-e",
+                                'tell application "System Events" to keystroke "q" using {control down, command down}',
+                            ],
+                            timeout=5,
+                        )
                         return "Locking the screen, sir."
 
                 except Exception as e:
@@ -368,7 +439,7 @@ class SkillManager:
                         for tool in [
                             f"gnome-screenshot -f {filename}",
                             f"scrot {filename}",
-                            f"import -window root {filename}"
+                            f"import -window root {filename}",
                         ]:
                             try:
                                 subprocess.run(tool.split(), timeout=10)
@@ -391,8 +462,12 @@ class SkillManager:
             name = "voice_change"
             description = "Change Claudette's voice"
             triggers = [
-                "change voice", "switch voice", "different voice",
-                "use voice", "speak with", "change accent"
+                "change voice",
+                "switch voice",
+                "different voice",
+                "use voice",
+                "speak with",
+                "change accent",
             ]
 
             # Available voice presets
@@ -410,7 +485,11 @@ class SkillManager:
                 command_lower = command.lower()
 
                 # Check for list voices
-                if "list" in command_lower or "available" in command_lower or "what" in command_lower:
+                if (
+                    "list" in command_lower
+                    or "available" in command_lower
+                    or "what" in command_lower
+                ):
                     voices = []
                     for name, (voice_id, desc) in self.VOICE_PRESETS.items():
                         current = " (current)" if voice_id == claudette.tts_voice else ""
@@ -433,16 +512,25 @@ class SkillManager:
             name = "personality"
             description = "Change Claudette's personality"
             triggers = [
-                "change personality", "switch personality", "different personality",
-                "be more", "act like", "personality mode"
+                "change personality",
+                "switch personality",
+                "different personality",
+                "be more",
+                "act like",
+                "personality mode",
             ]
 
             def execute(self, command: str, claudette) -> str:
                 from .personalities import PERSONALITIES, get_personality
+
                 command_lower = command.lower()
 
                 # Check for list personalities
-                if "list" in command_lower or "available" in command_lower or "what" in command_lower:
+                if (
+                    "list" in command_lower
+                    or "available" in command_lower
+                    or "what" in command_lower
+                ):
                     names = [f"{name}: {desc}" for name, (desc, _) in PERSONALITIES.items()]
                     return f"Available personalities: {', '.join(names)}. Say 'change personality to' followed by the name."
 
@@ -459,8 +547,11 @@ class SkillManager:
             name = "wake_word"
             description = "Manage wake word variants"
             triggers = [
-                "add wake word", "new wake word", "wake word variant",
-                "teach wake word", "learn my voice"
+                "add wake word",
+                "new wake word",
+                "wake word variant",
+                "teach wake word",
+                "learn my voice",
             ]
 
             def execute(self, command: str, claudette) -> str:
@@ -471,6 +562,7 @@ class SkillManager:
                     # Extract the variant from the command
                     # Pattern: "add wake word [variant]" or "teach wake word [variant]"
                     import re
+
                     patterns = [
                         r"add wake word[:\s]+(.+)",
                         r"teach wake word[:\s]+(.+)",
@@ -501,21 +593,23 @@ class SkillManager:
                 skill_names = [s.name for s in claudette.skills.skills]
                 return f"I have {len(skill_names)} skills available, sir: {', '.join(skill_names)}. For anything else, I'll consult Claude."
 
-        self.skills.extend([
-            TimeSkill(),
-            DateSkill(),
-            ClearMemorySkill(),
-            StatusSkill(),
-            SystemInfoSkill(),
-            BatterySkill(),
-            VolumeSkill(),
-            LockScreenSkill(),
-            ScreenshotSkill(),
-            VoiceChangeSkill(),
-            PersonalitySkill(),
-            WakeWordSkill(),
-            ListSkillsSkill(),
-        ])
+        self.skills.extend(
+            [
+                TimeSkill(),
+                DateSkill(),
+                ClearMemorySkill(),
+                StatusSkill(),
+                SystemInfoSkill(),
+                BatterySkill(),
+                VolumeSkill(),
+                LockScreenSkill(),
+                ScreenshotSkill(),
+                VoiceChangeSkill(),
+                PersonalitySkill(),
+                WakeWordSkill(),
+                ListSkillsSkill(),
+            ]
+        )
         logger.info(f"Loaded {len(self.skills)} built-in skills")
 
     def _load_custom_skills(self):
@@ -531,18 +625,14 @@ class SkillManager:
 
             try:
                 # Load the module
-                spec = importlib.util.spec_from_file_location(
-                    skill_file.stem, skill_file
-                )
+                spec = importlib.util.spec_from_file_location(skill_file.stem, skill_file)
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
 
                 # Find Skill subclasses
                 for name in dir(module):
                     obj = getattr(module, name)
-                    if (isinstance(obj, type) and
-                        issubclass(obj, Skill) and
-                        obj is not Skill):
+                    if isinstance(obj, type) and issubclass(obj, Skill) and obj is not Skill:
                         skill = obj()
                         self.skills.append(skill)
                         logger.info(f"Loaded custom skill: {skill.name}")
@@ -580,10 +670,6 @@ class SkillManager:
     def list_skills(self) -> list[dict]:
         """List all available skills."""
         return [
-            {
-                "name": s.name,
-                "description": s.description,
-                "triggers": s.triggers
-            }
+            {"name": s.name, "description": s.description, "triggers": s.triggers}
             for s in self.skills
         ]
