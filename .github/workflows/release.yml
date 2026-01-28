@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          cat > release_notes.md << 'HEADER'
+          ## Claudette ${{ github.ref_name }}
+
+          A sophisticated AI voice assistant with 1940s British charm.
+
+          ### Installation
+
+          ```bash
+          pip install claudette-voice
+
+          # With all features
+          pip install claudette-voice[all]
+          ```
+
+          ### Changes
+          HEADER
+
+          if [ -z "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s" --no-merges >> release_notes.md
+          else
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges >> release_notes.md
+          fi
+
+          cat >> release_notes.md << 'FOOTER'
+
+          ### Requirements
+
+          - Python 3.10+
+          - [Claude CLI](https://github.com/anthropics/claude-code) installed
+          - PortAudio (`sudo apt install portaudio19-dev`)
+
+          [Full documentation](https://github.com/cyberkoder/claudette#readme)
+          FOOTER
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Claudette ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/claudette-voice
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

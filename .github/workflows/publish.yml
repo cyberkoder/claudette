@@ -1,12 +1,10 @@
-name: Publish to PyPI
+name: Manual Publish
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       test_pypi:
-        description: 'Publish to TestPyPI instead'
+        description: 'Publish to TestPyPI instead of PyPI'
         required: false
         default: false
         type: boolean
@@ -39,7 +37,7 @@ jobs:
 
   publish-to-testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch' && inputs.test_pypi
+    if: inputs.test_pypi
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -61,7 +59,7 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && !inputs.test_pypi)
+    if: ${{ !inputs.test_pypi }}
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -78,23 +76,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
-  github-release:
-    name: Upload to GitHub Release
-    if: github.event_name == 'release'
-    needs: publish-to-pypi
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package-distributions
-          path: dist/
-
-      - name: Upload to GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
