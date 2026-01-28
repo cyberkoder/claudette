@@ -8,5 +8,6 @@ __version__ = "0.1.0"
 __author__ = "Claudette Contributors"
 
 from .assistant import Claudette, main
+from .skills import Skill, SkillManager
 
-__all__ = ["Claudette", "main", "__version__"]
+__all__ = ["Claudette", "main", "Skill", "SkillManager", "__version__"]

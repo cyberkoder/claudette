@@ -39,6 +39,9 @@ except ImportError:
     FASTER_WHISPER_AVAILABLE = False
     WhisperModel = None
 
+# Import skills system
+from .skills import SkillManager
+
 
 # Set up logging - use current working directory for logs
 log_dir = Path.cwd() / "logs"
@@ -231,6 +234,13 @@ class Claudette:
         else:
             self.memory = None
             logger.info("Conversation memory disabled")
+
+        # Initialize skills/plugins system
+        skills_dir = self.config.get("skills", {}).get("directory")
+        if skills_dir:
+            skills_dir = Path(skills_dir).expanduser()
+        self.skills = SkillManager(skills_dir)
+        logger.info(f"Loaded {len(self.skills.skills)} skills")
 
         # Initialize VAD model
         self._init_vad()
@@ -793,6 +803,16 @@ class Claudette:
         """Execute a command with Claude and speak the response."""
         # Store command for potential confirmation follow-up
         self.last_command = command
+
+        # Try skills first (instant response for built-in commands)
+        skill_response = self.skills.execute(command, self)
+        if skill_response:
+            logger.info(f"Skill handled command: '{command}'")
+            self._speak(skill_response)
+            # Still enter conversation mode
+            self.conversation_mode = True
+            print("   (Conversation mode: say follow-up or 'thank you' to end)")
+            return
 
         # Run Claude and TTS acknowledgment in parallel
         # Start Claude in background

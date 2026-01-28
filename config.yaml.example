@@ -58,3 +58,7 @@ memory:
   enabled: true                    # Enable conversation memory
   max_exchanges: 20                # Maximum exchanges to remember
   # file: "~/.claudette_memory.json"  # Custom memory file location
+
+skills:
+  # Custom skills/plugins directory
+  # directory: "./skills"          # Path to custom skills
