@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Claudette" width="400">
+  <img src="https://raw.githubusercontent.com/cyberkoder/claudette/main/logo.png" alt="Claudette" width="400">
 </p>
 
 <h1 align="center">Claudette</h1>
