@@ -348,50 +348,97 @@ class Claudette:
 
         return audio_data
 
+    def _split_into_sentences(self, text: str) -> list[str]:
+        """Split text into sentences for streaming TTS."""
+        import re
+        # Split on sentence-ending punctuation, keeping the punctuation
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        # Filter out empty strings and strip whitespace
+        return [s.strip() for s in sentences if s.strip()]
+
+    def _play_audio_file(self, file_path: str):
+        """Play an audio file and wait for completion."""
+        pygame.mixer.music.load(file_path)
+        pygame.time.wait(50)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            pygame.time.wait(50)
+        pygame.time.wait(50)
+
     def _speak(self, text: str, audio_data: bytes = None):
-        """Speak text using TTS. If audio_data provided, use it directly."""
+        """Speak text using TTS with streaming for long responses."""
         logger.info(f"Speaking: '{text[:50]}...' ({len(text)} chars)")
         self._update_state(VoiceState.SPEAKING)
         print(f"\n💋 Claudette: {text}\n")
 
         try:
-            # Use provided audio, cached audio, or generate new
+            # Check cache first
             if audio_data is None:
                 audio_data = self._audio_cache.get(text)
                 if audio_data:
                     logger.debug("Using cached audio")
 
-            if audio_data is None:
+            # If we have cached/provided audio, play it directly
+            if audio_data is not None:
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    f.write(audio_data)
+                    temp_path = f.name
+                self._play_audio_file(temp_path)
+                os.unlink(temp_path)
+                logger.debug("Audio playback finished")
+                return
+
+            # For long text, use streaming (sentence by sentence)
+            sentences = self._split_into_sentences(text)
+
+            if len(sentences) <= 1:
+                # Short text - generate and play directly
                 logger.debug("Generating TTS audio...")
                 start_time = datetime.now()
                 audio_data = asyncio.run(self._synthesize_speech(text))
                 elapsed = (datetime.now() - start_time).total_seconds()
                 logger.debug(f"TTS generated in {elapsed:.2f}s, {len(audio_data)} bytes")
 
-            # Save to temp file and play
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                f.write(audio_data)
-                temp_path = f.name
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    f.write(audio_data)
+                    temp_path = f.name
+                self._play_audio_file(temp_path)
+                os.unlink(temp_path)
+            else:
+                # Streaming mode: generate and play sentence by sentence
+                logger.debug(f"Streaming TTS for {len(sentences)} sentences")
+                temp_files = []
 
-            # Load and play audio with proper initialization
-            pygame.mixer.music.load(temp_path)
-            pygame.time.wait(100)  # Small delay to ensure audio is ready
-            pygame.mixer.music.play()
-            logger.debug("Audio playback started")
+                # Generate first sentence immediately
+                first_audio = asyncio.run(self._synthesize_speech(sentences[0]))
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    f.write(first_audio)
+                    first_file = f.name
 
-            # Wait for playback to actually start
-            pygame.time.wait(50)
+                # Start generating remaining sentences in background
+                remaining_futures = []
+                for sentence in sentences[1:]:
+                    future = executor.submit(
+                        lambda s=sentence: asyncio.run(self._synthesize_speech(s))
+                    )
+                    remaining_futures.append((sentence, future))
 
-            # Wait for playback to finish
-            while pygame.mixer.music.get_busy():
-                pygame.time.wait(50)
+                # Play first sentence
+                logger.debug(f"Playing sentence 1/{len(sentences)}")
+                self._play_audio_file(first_file)
+                os.unlink(first_file)
 
-            # Small delay after playback
-            pygame.time.wait(100)
+                # Play remaining sentences as they complete
+                for i, (sentence, future) in enumerate(remaining_futures, 2):
+                    audio_data = future.result()
+                    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                        f.write(audio_data)
+                        temp_path = f.name
+                    logger.debug(f"Playing sentence {i}/{len(sentences)}")
+                    self._play_audio_file(temp_path)
+                    os.unlink(temp_path)
+
             logger.debug("Audio playback finished")
-
-            # Cleanup
-            os.unlink(temp_path)
 
         except Exception as e:
             logger.error(f"TTS error: {e}")
