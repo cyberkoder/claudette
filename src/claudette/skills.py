@@ -6,10 +6,8 @@ Allows extending Claudette with custom voice-activated skills.
 
 import importlib.util
 import logging
-import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("claudette")
 
@@ -45,7 +43,7 @@ class Skill(ABC):
         return False
 
     @abstractmethod
-    def execute(self, command: str, claudette) -> Optional[str]:
+    def execute(self, command: str, claudette) -> str | None:
         """Execute the skill and return a response.
 
         Args:
@@ -61,7 +59,7 @@ class Skill(ABC):
 class SkillManager:
     """Manages loading and executing Claudette skills."""
 
-    def __init__(self, skills_dir: Optional[Path] = None):
+    def __init__(self, skills_dir: Path | None = None):
         self.skills_dir = skills_dir or Path.cwd() / "skills"
         self.skills: list[Skill] = []
         self._load_builtin_skills()
@@ -197,7 +195,7 @@ class SkillManager:
                     import psutil
 
                     mem = psutil.virtual_memory()
-                    used_gb = mem.used / (1024**3)
+                    mem.used / (1024**3)
                     total_gb = mem.total / (1024**3)
                     parts.append(f"Memory usage is {mem.percent:.0f}% of {total_gb:.1f} gigabytes.")
                 except ImportError:
@@ -233,7 +231,7 @@ class SkillManager:
 
                     if plugged:
                         if percent >= 100:
-                            return f"Battery is fully charged and plugged in, sir."
+                            return "Battery is fully charged and plugged in, sir."
                         else:
                             return f"Battery is at {percent:.0f}% and charging, sir."
                     else:
@@ -498,7 +496,7 @@ class SkillManager:
                     return f"Available voices are: {voice_list}. Say 'change voice to' followed by the name."
 
                 # Check for specific voice request
-                for name, (voice_id, desc) in self.VOICE_PRESETS.items():
+                for name, (voice_id, _desc) in self.VOICE_PRESETS.items():
                     if name in command_lower:
                         claudette.tts_voice = voice_id
                         # Clear audio cache since voice changed
@@ -644,7 +642,7 @@ class SkillManager:
         if loaded:
             logger.info(f"Loaded {loaded} custom skills from {self.skills_dir}")
 
-    def find_skill(self, command: str) -> Optional[Skill]:
+    def find_skill(self, command: str) -> Skill | None:
         """Find a skill that matches the command."""
         for skill in self.skills:
             if skill.matches(command):
@@ -652,7 +650,7 @@ class SkillManager:
                 return skill
         return None
 
-    def execute(self, command: str, claudette) -> Optional[str]:
+    def execute(self, command: str, claudette) -> str | None:
         """Try to execute a matching skill.
 
         Returns:

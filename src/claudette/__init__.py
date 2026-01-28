@@ -8,14 +8,14 @@ __version__ = "0.1.2"
 __author__ = "Claudette Contributors"
 
 from .assistant import Claudette, main
+from .audio_processing import AudioProcessor
+from .hotkey import HotkeyManager
+from .notifications import NotificationManager
+from .offline import OfflineFallback, check_network
+from .personalities import PERSONALITIES, get_personality, list_personalities
 from .skills import Skill, SkillManager
 from .sounds import SoundEffects
-from .hotkey import HotkeyManager
 from .tray import TrayIcon, WaveformWindow
-from .notifications import NotificationManager
-from .personalities import PERSONALITIES, get_personality, list_personalities
-from .audio_processing import AudioProcessor
-from .offline import OfflineFallback, check_network
 
 __all__ = [
     "Claudette",

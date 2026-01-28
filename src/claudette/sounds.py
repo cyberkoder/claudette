@@ -4,11 +4,12 @@ Sound effects for Claudette state changes.
 Uses synthesized tones - no external audio files needed.
 """
 
+import io
 import logging
+import wave
+
 import numpy as np
 import pygame
-import io
-import wave
 
 logger = logging.getLogger("claudette")
 

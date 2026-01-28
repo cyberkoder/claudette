@@ -6,7 +6,7 @@ Allows triggering voice commands via keyboard shortcuts.
 
 import logging
 import threading
-from typing import Callable, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger("claudette")
 
@@ -27,12 +27,12 @@ class HotkeyManager:
         self,
         enabled: bool = True,
         hotkey: str = "<ctrl>+<shift>+c",
-        callback: Optional[Callable] = None,
+        callback: Callable | None = None,
     ):
         self.enabled = enabled and PYNPUT_AVAILABLE
         self.hotkey = hotkey
         self.callback = callback
-        self._listener: Optional["keyboard.GlobalHotKeys"] = None
+        self._listener: keyboard.GlobalHotKeys | None = None
         self._running = False
 
         if enabled and not PYNPUT_AVAILABLE:

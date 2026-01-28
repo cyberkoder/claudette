@@ -5,6 +5,7 @@ Provides noise reduction and audio enhancement features.
 """
 
 import logging
+
 import numpy as np
 
 logger = logging.getLogger("claudette")

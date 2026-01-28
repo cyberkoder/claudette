@@ -21,7 +21,6 @@ import threading
 import wave
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import edge_tts
 import numpy as np
@@ -41,14 +40,14 @@ except ImportError:
     WhisperModel = None
 
 # Import skills system
+from .audio_processing import AudioProcessor
+from .hotkey import HotkeyManager, get_default_hotkey
+from .notifications import NotificationManager
+from .offline import OfflineFallback
+from .personalities import CLAUDETTE_DEFAULT, get_personality
 from .skills import SkillManager
 from .sounds import SoundEffects
-from .hotkey import HotkeyManager, get_default_hotkey
 from .tray import TrayIcon, WaveformWindow
-from .notifications import NotificationManager
-from .personalities import get_personality, CLAUDETTE_DEFAULT
-from .audio_processing import AudioProcessor
-from .offline import OfflineFallback
 
 # Set up logging - use current working directory for logs
 log_dir = Path.cwd() / "logs"
@@ -107,7 +106,7 @@ class VoiceState:
 class ConversationMemory:
     """Persistent conversation memory for context across sessions."""
 
-    def __init__(self, memory_file: Optional[Path] = None, max_exchanges: int = 20):
+    def __init__(self, memory_file: Path | None = None, max_exchanges: int = 20):
         self.memory_file = memory_file or Path.cwd() / ".claudette_memory.json"
         self.max_exchanges = max_exchanges
         self.exchanges: list[dict] = []
@@ -117,11 +116,11 @@ class ConversationMemory:
         """Load conversation history from file."""
         if self.memory_file.exists():
             try:
-                with open(self.memory_file, "r") as f:
+                with open(self.memory_file) as f:
                     data = json.load(f)
                     self.exchanges = data.get("exchanges", [])[-self.max_exchanges :]
                     logger.debug(f"Loaded {len(self.exchanges)} exchanges from memory")
-            except (json.JSONDecodeError, IOError) as e:
+            except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Failed to load memory: {e}")
                 self.exchanges = []
 
@@ -137,7 +136,7 @@ class ConversationMemory:
                     f,
                     indent=2,
                 )
-        except IOError as e:
+        except OSError as e:
             logger.warning(f"Failed to save memory: {e}")
 
     def add_exchange(self, user_input: str, assistant_response: str):
@@ -344,7 +343,7 @@ class Claudette:
         """Load configuration from YAML file."""
         config_file = find_config_file(config_path)
         logger.info(f"Loading config from: {config_file}")
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             return yaml.safe_load(f)
 
     def _init_vad(self):
@@ -609,7 +608,6 @@ class Claudette:
             else:
                 # Streaming mode: generate and play sentence by sentence
                 logger.debug(f"Streaming TTS for {len(sentences)} sentences")
-                temp_files = []
 
                 # Generate first sentence immediately
                 first_audio = asyncio.run(self._synthesize_speech(sentences[0]))
@@ -631,7 +629,7 @@ class Claudette:
                 os.unlink(first_file)
 
                 # Play remaining sentences as they complete
-                for i, (sentence, future) in enumerate(remaining_futures, 2):
+                for i, (_sentence, future) in enumerate(remaining_futures, 2):
                     audio_data = future.result()
                     with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                         f.write(audio_data)
@@ -699,7 +697,7 @@ class Claudette:
         except Exception as e:
             logger.error(f"Claude CLI error: {e}")
             self.sounds.play_error()
-            return f"I'm afraid something went wrong, sir. Technical difficulties, you understand."
+            return "I'm afraid something went wrong, sir. Technical difficulties, you understand."
 
     def _detect_speech_segment(self) -> np.ndarray | None:
         """Listen for speech using VAD, return audio when speech ends."""
@@ -1070,11 +1068,11 @@ def main():
     # Find config file
     config_path = find_config_file()
     if not config_path.exists():
-        print(f"Error: Config file not found.")
-        print(f"Please create a config.yaml in one of these locations:")
+        print("Error: Config file not found.")
+        print("Please create a config.yaml in one of these locations:")
         print(f"  - {Path.cwd() / 'config.yaml'}")
         print(f"  - {Path.home() / '.config' / 'claudette' / 'config.yaml'}")
-        print(f"\nYou can copy config.yaml.example as a starting point.")
+        print("\nYou can copy config.yaml.example as a starting point.")
         sys.exit(1)
 
     claudette = Claudette()

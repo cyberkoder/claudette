@@ -5,7 +5,6 @@ Provides system notifications for important events.
 """
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger("claudette")
 
@@ -32,7 +31,7 @@ class NotificationManager:
                 "Install with: pip install plyer"
             )
 
-    def notify(self, title: str, message: str, timeout: int = 5, icon_path: Optional[str] = None):
+    def notify(self, title: str, message: str, timeout: int = 5, icon_path: str | None = None):
         """Show a desktop notification.
 
         Args:

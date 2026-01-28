@@ -6,7 +6,6 @@ Provides basic functionality when network is unavailable.
 
 import logging
 import socket
-from typing import Optional
 
 logger = logging.getLogger("claudette")
 
@@ -26,7 +25,7 @@ def check_network(host: str = "8.8.8.8", port: int = 53, timeout: float = 3.0) -
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
         return True
-    except (socket.error, socket.timeout):
+    except (TimeoutError, OSError):
         return False
 
 
@@ -82,7 +81,7 @@ class OfflineFallback:
             return True
         return False
 
-    def get_offline_response(self, command: str) -> Optional[str]:
+    def get_offline_response(self, command: str) -> str | None:
         """Get a canned response for offline mode.
 
         Args:

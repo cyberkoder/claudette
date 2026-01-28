@@ -6,9 +6,7 @@ Provides a system tray icon with status indicator and optional waveform visualiz
 
 import logging
 import threading
-from pathlib import Path
-from typing import Callable, Optional
-import io
+from collections.abc import Callable
 
 logger = logging.getLogger("claudette")
 
@@ -41,15 +39,15 @@ class TrayIcon:
     def __init__(
         self,
         enabled: bool = True,
-        on_activate: Optional[Callable] = None,
-        on_quit: Optional[Callable] = None,
+        on_activate: Callable | None = None,
+        on_quit: Callable | None = None,
     ):
         self.enabled = enabled and TRAY_AVAILABLE
         self.on_activate = on_activate
         self.on_quit = on_quit
-        self._icon: Optional["pystray.Icon"] = None
+        self._icon: pystray.Icon | None = None
         self._state = "idle"
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         if enabled and not TRAY_AVAILABLE:
             logger.warning(
