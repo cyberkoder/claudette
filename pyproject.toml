@@ -1,0 +1,90 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claudette-voice"
+version = "0.1.0"
+description = "A sophisticated AI voice assistant with 1940s British charm - voice interface for Claude CLI"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Claudette Contributors" }
+]
+keywords = [
+    "voice-assistant",
+    "claude",
+    "ai",
+    "speech-recognition",
+    "tts",
+    "whisper"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "requests>=2.28.0",
+    "pyyaml>=6.0",
+    "packaging>=21.0",
+    "edge-tts>=6.1.0",
+    "pygame>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+claudette = "claudette:main"
+
+[project.urls]
+Homepage = "https://github.com/cyberkoder/claudette"
+Documentation = "https://github.com/cyberkoder/claudette#readme"
+Repository = "https://github.com/cyberkoder/claudette"
+Issues = "https://github.com/cyberkoder/claudette/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claudette"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/config.yaml",
+    "/logo.png",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = true

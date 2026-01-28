@@ -1,0 +1,35 @@
+# Claudette Configuration
+# Copy this file to config.yaml and customize for your setup
+
+whisper:
+  # URL of your Whisper ASR server
+  # Popular options:
+  #   - faster-whisper-server: https://github.com/fedirz/faster-whisper-server
+  #   - whisper.cpp server: https://github.com/ggerganov/whisper.cpp
+  url: "http://localhost:9300/asr"
+  language: "en"
+
+audio:
+  # Audio capture settings (optimized for Whisper)
+  sample_rate: 16000
+  channels: 1
+
+# Wake word to activate Claudette
+# She responds to many variations automatically
+wake_word: "claudette"
+
+vad:
+  # Voice Activity Detection settings
+  threshold: 0.5           # Speech probability threshold (0.0-1.0)
+  min_speech_ms: 250       # Minimum speech duration to trigger (ms)
+  silence_duration: 1.5    # Seconds of silence to end recording
+
+tts:
+  # Text-to-Speech settings using Edge TTS
+  # British English female voices:
+  #   - en-GB-SoniaNeural (default) - Professional, clear
+  #   - en-GB-LibbyNeural - Warm, friendly
+  #   - en-GB-MaisieNeural - Young, energetic
+  voice: "en-GB-SoniaNeural"
+  rate: "+0%"              # Speech rate: -50% to +100%
+  pitch: "+0Hz"            # Pitch adjustment: -50Hz to +50Hz
