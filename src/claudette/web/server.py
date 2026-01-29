@@ -266,10 +266,13 @@ class WebServer:
         self._thread = threading.Thread(target=self._run_server, daemon=True)
         self._thread.start()
 
-        # Wait briefly to ensure server starts
+        # Wait for server to start (up to 5 seconds)
         import time
 
-        time.sleep(0.5)
+        for _ in range(50):  # 50 x 0.1s = 5 seconds max
+            time.sleep(0.1)
+            if self._running:
+                break
 
         if self._running:
             logger.info(f"Web dashboard available at http://{self.host}:{self.port}")
