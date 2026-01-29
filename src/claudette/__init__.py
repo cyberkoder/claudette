@@ -17,6 +17,16 @@ from .skills import Skill, SkillManager
 from .sounds import SoundEffects
 from .tray import TrayIcon, WaveformWindow
 
+# Web module (optional, requires fastapi/uvicorn)
+try:
+    from .web import ClaudetteStateManager, WebServer
+
+    _WEB_AVAILABLE = True
+except ImportError:
+    ClaudetteStateManager = None
+    WebServer = None
+    _WEB_AVAILABLE = False
+
 __all__ = [
     "Claudette",
     "main",
@@ -33,5 +43,7 @@ __all__ = [
     "AudioProcessor",
     "OfflineFallback",
     "check_network",
+    "WebServer",
+    "ClaudetteStateManager",
     "__version__",
 ]

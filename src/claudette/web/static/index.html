@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claudette Dashboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</head>
+<body x-data="claudetteDashboard()" x-init="init()">
+    <!-- Navigation -->
+    <nav class="sidebar">
+        <div class="logo">
+            <span class="logo-icon">C</span>
+            <span class="logo-text">Claudette</span>
+        </div>
+
+        <ul class="nav-links">
+            <li>
+                <a href="#" :class="{ active: currentPage === 'status' }" @click.prevent="currentPage = 'status'">
+                    <span class="nav-icon">S</span>
+                    Status
+                </a>
+            </li>
+            <li>
+                <a href="#" :class="{ active: currentPage === 'settings' }" @click.prevent="currentPage = 'settings'">
+                    <span class="nav-icon">G</span>
+                    Settings
+                </a>
+            </li>
+            <li>
+                <a href="#" :class="{ active: currentPage === 'skills' }" @click.prevent="currentPage = 'skills'">
+                    <span class="nav-icon">K</span>
+                    Skills
+                </a>
+            </li>
+            <li>
+                <a href="#" :class="{ active: currentPage === 'history' }" @click.prevent="currentPage = 'history'">
+                    <span class="nav-icon">H</span>
+                    History
+                </a>
+            </li>
+            <li>
+                <a href="#" :class="{ active: currentPage === 'logs' }" @click.prevent="currentPage = 'logs'">
+                    <span class="nav-icon">L</span>
+                    Logs
+                </a>
+            </li>
+        </ul>
+
+        <div class="connection-status" :class="{ connected: wsConnected }">
+            <span class="status-dot"></span>
+            <span x-text="wsConnected ? 'Connected' : 'Disconnected'"></span>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content">
+        <!-- Status Page -->
+        <div x-show="currentPage === 'status'" class="page">
+            <h1>Status</h1>
+
+            <div class="status-grid">
+                <!-- State Card -->
+                <div class="card state-card">
+                    <h3>Current State</h3>
+                    <div class="state-indicator" :class="stateClass">
+                        <span class="state-icon" x-text="stateIcon"></span>
+                        <span class="state-text" x-text="state.state || 'idle'"></span>
+                    </div>
+                    <div class="state-details">
+                        <p x-show="state.conversation_mode">
+                            <span class="badge badge-blue">Conversation Mode</span>
+                        </p>
+                        <p x-show="state.awaiting_confirmation">
+                            <span class="badge badge-yellow">Awaiting Confirmation</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Audio Level Card -->
+                <div class="card">
+                    <h3>Audio Level</h3>
+                    <div class="audio-meter">
+                        <div class="audio-bar" :style="{ width: (state.audio_level * 100) + '%' }"></div>
+                    </div>
+                    <p class="audio-value" x-text="Math.round(state.audio_level * 100) + '%'"></p>
+                </div>
+
+                <!-- Uptime Card -->
+                <div class="card">
+                    <h3>Uptime</h3>
+                    <p class="uptime" x-text="formatUptime(state.uptime_seconds)"></p>
+                </div>
+
+                <!-- Last Activity Card -->
+                <div class="card wide">
+                    <h3>Last Activity</h3>
+                    <div class="activity">
+                        <div class="activity-item" x-show="state.last_transcription">
+                            <span class="activity-label">You said:</span>
+                            <p class="activity-text" x-text="state.last_transcription"></p>
+                        </div>
+                        <div class="activity-item" x-show="state.last_response">
+                            <span class="activity-label">Claudette:</span>
+                            <p class="activity-text" x-text="state.last_response"></p>
+                        </div>
+                        <p x-show="!state.last_transcription && !state.last_response" class="muted">
+                            No recent activity
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Claude Activity Card -->
+                <div class="card wide claude-activity-card">
+                    <h3>
+                        Claude Backend
+                        <span x-show="claudeActivity.active" class="badge badge-blue pulse">Active</span>
+                    </h3>
+                    <div class="claude-activity">
+                        <template x-if="claudeActivity.active">
+                            <div class="activity-content">
+                                <div class="activity-header">
+                                    <span class="claude-status" :class="'status-' + claudeActivity.status">
+                                        <span x-text="claudeActivity.status || 'thinking'"></span>
+                                    </span>
+                                    <span class="elapsed-time" x-text="formatElapsed(claudeActivity.elapsed_seconds)"></span>
+                                </div>
+                                <div class="query-display" x-show="claudeActivity.query">
+                                    <span class="query-label">Query:</span>
+                                    <span x-text="claudeActivity.query"></span>
+                                </div>
+                                <div class="progress-output" x-ref="claudeOutput">
+                                    <template x-for="line in claudeActivity.progress_lines.slice(-10)" :key="line">
+                                        <div class="progress-line" x-text="line"></div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="!claudeActivity.active">
+                            <p class="muted">Claude is idle</p>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- System Info Card -->
+                <div class="card">
+                    <h3>System</h3>
+                    <div class="system-info" x-show="systemInfo">
+                        <p><strong>Platform:</strong> <span x-text="systemInfo?.platform"></span></p>
+                        <p x-show="systemInfo?.cpu_percent !== null">
+                            <strong>CPU:</strong> <span x-text="systemInfo?.cpu_percent + '%'"></span>
+                        </p>
+                        <p x-show="systemInfo?.memory_percent !== null">
+                            <strong>Memory:</strong> <span x-text="systemInfo?.memory_percent + '%'"></span>
+                        </p>
+                        <p x-show="systemInfo?.battery_percent !== null">
+                            <strong>Battery:</strong>
+                            <span x-text="systemInfo?.battery_percent + '%'"></span>
+                            <span x-show="systemInfo?.battery_plugged">(Plugged in)</span>
+                        </p>
+                        <p x-show="systemInfo?.gpu_available">
+                            <strong>GPU:</strong> <span x-text="systemInfo?.gpu_name"></span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div x-show="currentPage === 'settings'" class="page">
+            <h1>Settings</h1>
+
+            <div class="settings-grid">
+                <!-- Voice Settings -->
+                <div class="card">
+                    <h3>Voice</h3>
+                    <div class="setting-group">
+                        <label for="voice-select">TTS Voice</label>
+                        <select id="voice-select" x-model="selectedVoice" @change="updateConfig('tts.voice', $event.target.value)">
+                            <template x-for="voice in voices" :key="voice.id">
+                                <option :value="voice.id" x-text="voice.name + ' (' + voice.language + ')'"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label for="voice-rate">Speech Rate</label>
+                        <select id="voice-rate" x-model="selectedRate" @change="updateConfig('tts.rate', $event.target.value)">
+                            <option value="-50%">Slow (-50%)</option>
+                            <option value="-25%">Slower (-25%)</option>
+                            <option value="+0%">Normal</option>
+                            <option value="+25%">Faster (+25%)</option>
+                            <option value="+50%">Fast (+50%)</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <button class="btn btn-primary" @click="testVoice()" :disabled="testingVoice">
+                            <span x-show="!testingVoice">Test Voice</span>
+                            <span x-show="testingVoice">Playing...</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Personality Settings -->
+                <div class="card">
+                    <h3>Personality</h3>
+                    <div class="setting-group">
+                        <label>Available Personalities</label>
+                        <div class="personality-list">
+                            <template x-for="p in personalities" :key="p.name">
+                                <button class="personality-btn" :class="{ active: false }" x-text="p.name"></button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VAD Settings -->
+                <div class="card">
+                    <h3>Voice Detection</h3>
+                    <div class="setting-group">
+                        <label for="vad-threshold">VAD Threshold: <span x-text="config.vad?.threshold || 0.5"></span></label>
+                        <input type="range" id="vad-threshold" min="0.1" max="0.9" step="0.1"
+                               :value="config.vad?.threshold || 0.5"
+                               @change="updateConfig('vad.threshold', parseFloat($event.target.value))">
+                        <p class="setting-hint">Higher = less sensitive, Lower = more sensitive</p>
+                    </div>
+                    <div class="setting-group">
+                        <label for="silence-duration">Silence Duration: <span x-text="(config.vad?.silence_duration || 1.5) + 's'"></span></label>
+                        <input type="range" id="silence-duration" min="0.5" max="3" step="0.5"
+                               :value="config.vad?.silence_duration || 1.5"
+                               @change="updateConfig('vad.silence_duration', parseFloat($event.target.value))">
+                        <p class="setting-hint">Time to wait after speech ends</p>
+                    </div>
+                </div>
+
+                <!-- Wake Word Settings -->
+                <div class="card">
+                    <h3>Wake Word</h3>
+                    <div class="setting-group">
+                        <label for="wake-word-input">Wake Word</label>
+                        <div class="input-with-button">
+                            <input type="text" id="wake-word-input"
+                                   x-model="wakeWordInput"
+                                   :placeholder="config.wake_word?.word || 'claudette'"
+                                   @keyup.enter="updateWakeWord()">
+                            <button class="btn btn-primary" @click="updateWakeWord()">Save</button>
+                        </div>
+                        <p class="setting-hint">Current: <span class="wake-word-current" x-text="config.wake_word?.word || 'claudette'"></span></p>
+                    </div>
+                    <div class="setting-group">
+                        <label>Custom Variants</label>
+                        <p class="setting-hint" x-text="(config.wake_word?.variants?.length || 0) + ' custom variants configured'"></p>
+                        <div class="variants-list" x-show="config.wake_word?.variants?.length > 0">
+                            <template x-for="variant in (config.wake_word?.variants || [])" :key="variant">
+                                <span class="variant-tag" x-text="variant"></span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sound Settings -->
+                <div class="card">
+                    <h3>Sounds</h3>
+                    <div class="setting-group">
+                        <label class="toggle-label">
+                            <input type="checkbox" :checked="config.sounds?.enabled"
+                                   @change="updateConfig('sounds.enabled', $event.target.checked)">
+                            <span>Enable Sound Effects</span>
+                        </label>
+                    </div>
+                    <div class="setting-group" x-show="config.sounds?.enabled">
+                        <label for="sound-volume">Volume: <span x-text="Math.round((config.sounds?.volume || 0.3) * 100) + '%'"></span></label>
+                        <input type="range" id="sound-volume" min="0" max="1" step="0.1"
+                               :value="config.sounds?.volume || 0.3"
+                               @change="updateConfig('sounds.volume', parseFloat($event.target.value))">
+                    </div>
+                </div>
+
+                <!-- Memory Settings -->
+                <div class="card">
+                    <h3>Memory</h3>
+                    <div class="setting-group">
+                        <label>Status</label>
+                        <p x-text="config.memory?.enabled ? 'Enabled' : 'Disabled'"></p>
+                    </div>
+                    <div class="setting-group" x-show="config.memory?.enabled">
+                        <p><strong>Exchanges:</strong> <span x-text="config.memory?.exchange_count || 0"></span> / <span x-text="config.memory?.max_exchanges || 20"></span></p>
+                    </div>
+                    <button class="btn btn-danger" @click="clearHistory()" x-show="config.memory?.enabled">
+                        Clear Memory
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skills Page -->
+        <div x-show="currentPage === 'skills'" class="page">
+            <h1>Skills</h1>
+            <p class="page-description">Built-in and custom skills that Claudette can execute instantly.</p>
+
+            <div class="skills-grid">
+                <template x-for="skill in skills" :key="skill.name">
+                    <div class="card skill-card">
+                        <h3 x-text="skill.name"></h3>
+                        <p class="skill-description" x-text="skill.description"></p>
+                        <div class="skill-triggers">
+                            <span class="trigger-label">Triggers:</span>
+                            <template x-for="trigger in skill.triggers.slice(0, 3)" :key="trigger">
+                                <span class="trigger-tag" x-text="trigger"></span>
+                            </template>
+                            <span x-show="skill.triggers.length > 3" class="more-triggers"
+                                  x-text="'+' + (skill.triggers.length - 3) + ' more'"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- History Page -->
+        <div x-show="currentPage === 'history'" class="page">
+            <h1>Conversation History</h1>
+
+            <div class="history-controls">
+                <button class="btn" @click="loadHistory()">Refresh</button>
+                <button class="btn btn-danger" @click="clearHistory()">Clear All</button>
+            </div>
+
+            <div class="history-list">
+                <template x-for="entry in history" :key="entry.timestamp">
+                    <div class="history-entry">
+                        <div class="history-timestamp" x-text="formatDate(entry.timestamp)"></div>
+                        <div class="history-exchange">
+                            <div class="history-user">
+                                <span class="speaker-label">You:</span>
+                                <span x-text="entry.user"></span>
+                            </div>
+                            <div class="history-assistant">
+                                <span class="speaker-label">Claudette:</span>
+                                <span x-text="entry.assistant"></span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="history.length === 0" class="muted">No conversation history</p>
+            </div>
+        </div>
+
+        <!-- Logs Page -->
+        <div x-show="currentPage === 'logs'" class="page">
+            <h1>Logs</h1>
+
+            <div class="logs-controls">
+                <label class="toggle-label">
+                    <input type="checkbox" x-model="autoScrollLogs">
+                    <span>Auto-scroll</span>
+                </label>
+                <button class="btn" @click="loadLogs()">Refresh</button>
+            </div>
+
+            <div class="logs-container" x-ref="logsContainer">
+                <template x-for="log in logs" :key="log.timestamp + log.message">
+                    <div class="log-entry" :class="'log-' + log.level.toLowerCase()">
+                        <span class="log-time" x-text="formatLogTime(log.timestamp)"></span>
+                        <span class="log-level" x-text="log.level"></span>
+                        <span class="log-message" x-text="log.message"></span>
+                    </div>
+                </template>
+                <p x-show="logs.length === 0" class="muted">No logs available</p>
+            </div>
+        </div>
+    </main>
+</body>
+</html>

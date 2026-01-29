@@ -111,4 +111,12 @@ personality:
 
 offline:
   # Offline fallback mode
-  enabled: true                    # Enable offline detection and fallback responses          # Path to custom skills
+  enabled: true                    # Enable offline detection and fallback responses
+
+web:
+  # Web dashboard for managing Claudette
+  # Requires: pip install claudette-voice[web]
+  enabled: false                   # Enable web dashboard (off by default)
+  host: "127.0.0.1"               # Host to bind to (localhost only for security)
+  port: 8420                       # Port to listen on
+  # Access at: http://localhost:8420

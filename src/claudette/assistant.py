@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import wave
 from datetime import datetime
 from pathlib import Path
@@ -333,6 +334,13 @@ class Claudette:
         offline_config = self.config.get("offline", {})
         self.offline = OfflineFallback(enabled=offline_config.get("enabled", True))
 
+        # Initialize web dashboard (optional)
+        self.web_server = None
+        self.state_manager = None
+        web_config = self.config.get("web", {})
+        if web_config.get("enabled", False):
+            self._init_web_server(web_config)
+
         # Initialize VAD model
         self._init_vad()
 
@@ -345,6 +353,34 @@ class Claudette:
         logger.info(f"Loading config from: {config_file}")
         with open(config_file) as f:
             return yaml.safe_load(f)
+
+    def _init_web_server(self, web_config: dict):
+        """Initialize web dashboard server."""
+        try:
+            from .web import ClaudetteStateManager, WebServer
+
+            host = web_config.get("host", "127.0.0.1")
+            port = web_config.get("port", 8420)
+
+            # Create state manager and set claudette reference
+            self.state_manager = ClaudetteStateManager()
+            self.state_manager.set_claudette(self)
+
+            # Create web server
+            self.web_server = WebServer(
+                state_manager=self.state_manager,
+                host=host,
+                port=port,
+            )
+            logger.info(f"Web dashboard configured at http://{host}:{port}")
+
+        except ImportError as e:
+            logger.warning(
+                f"Web dashboard dependencies not installed: {e}. "
+                "Install with: pip install claudette-voice[web]"
+            )
+            self.web_server = None
+            self.state_manager = None
 
     def _init_vad(self):
         """Initialize Silero VAD model with optional GPU acceleration."""
@@ -411,6 +447,8 @@ class Claudette:
             "My pleasure, sir.",
             "Very well, sir. Proceeding.",
             "Understood, sir.",
+            "Still working on it, sir.",
+            "Looking into that now, sir.",
         ]
 
         for phrase in common_phrases:
@@ -444,6 +482,12 @@ class Claudette:
         tray_state = tray_states.get(state, "idle")
         self.tray.set_state(tray_state)
 
+        # Update web dashboard state manager
+        if self.state_manager:
+            self.state_manager.update_state(state)
+            self.state_manager.update_conversation_mode(self.conversation_mode)
+            self.state_manager.update_awaiting_confirmation(self.awaiting_confirmation)
+
     def _shutdown(self):
         """Graceful shutdown."""
         self.running = False
@@ -453,6 +497,12 @@ class Claudette:
         if status:
             print(f"Audio status: {status}", file=sys.stderr)
         self.audio_queue.put(indata.copy())
+
+        # Update audio level for web dashboard
+        if self.state_manager:
+            # Calculate RMS audio level
+            audio_level = np.sqrt(np.mean(indata**2))
+            self.state_manager.update_audio_level(float(audio_level))
 
     def _on_hotkey_pressed(self):
         """Called when activation hotkey is pressed."""
@@ -572,6 +622,10 @@ class Claudette:
         self._update_state(VoiceState.SPEAKING)
         print(f"\n💋 Claudette: {text}\n")
 
+        # Update web dashboard with response
+        if self.state_manager:
+            self.state_manager.update_last_response(text)
+
         try:
             # Check cache first
             if audio_data is None:
@@ -649,9 +703,13 @@ class Claudette:
         return asyncio.run(self._synthesize_speech(text))
 
     def _execute_claude(self, command: str) -> str:
-        """Execute command with Claude CLI and return response."""
+        """Execute command with Claude CLI and return response with streaming progress."""
         logger.info(f"Executing Claude with command: '{command}'")
         self._update_state(VoiceState.THINKING)
+
+        # Start tracking Claude activity
+        if self.state_manager:
+            self.state_manager.start_claude_activity(command)
 
         try:
             # Build the full prompt with personality and conversation context
@@ -668,18 +726,69 @@ class Claudette:
             logger.debug(f"Full prompt length: {len(full_prompt)} chars")
 
             start_time = datetime.now()
-            result = subprocess.run(
-                ["claude", "-p", full_prompt], capture_output=True, text=True, timeout=60
-            )
-            elapsed = (datetime.now() - start_time).total_seconds()
 
-            response = result.stdout.strip()
+            # Use Popen for streaming output
+            process = subprocess.Popen(
+                ["claude", "-p", full_prompt],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,  # Line buffered
+            )
+
+            output_lines = []
+            last_progress_speech = time.time()
+            progress_spoken = False
+
+            # Stream stdout
+            while True:
+                line = process.stdout.readline()
+                if not line and process.poll() is not None:
+                    break
+
+                if line:
+                    line = line.rstrip()
+                    output_lines.append(line)
+
+                    # Update state manager with progress
+                    if self.state_manager:
+                        # Detect status from output patterns
+                        line_lower = line.lower()
+                        if any(x in line_lower for x in ["searching", "looking", "finding"]):
+                            self.state_manager.update_claude_status("searching")
+                        elif any(x in line_lower for x in ["reading", "examining", "analyzing"]):
+                            self.state_manager.update_claude_status("reading")
+                        elif any(x in line_lower for x in ["writing", "creating", "generating"]):
+                            self.state_manager.update_claude_status("writing")
+
+                        self.state_manager.add_claude_progress(line)
+                        self.state_manager.update_claude_output("\n".join(output_lines[-20:]))
+
+                    # Speak brief progress update every 5 seconds
+                    now = time.time()
+                    if not progress_spoken and (now - last_progress_speech) > 5:
+                        if len(output_lines) > 3:
+                            # Quick progress speech
+                            executor.submit(self._speak_progress, "Still working on it, sir.")
+                            last_progress_speech = now
+                            progress_spoken = True
+
+            # Get any remaining stderr
+            stderr = process.stderr.read()
+            if stderr:
+                logger.warning(f"Claude stderr: {stderr}")
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            response = "\n".join(output_lines).strip()
+
             logger.info(
                 f"Claude response ({elapsed:.2f}s): '{response[:100]}...' ({len(response)} chars)"
             )
 
-            if result.stderr:
-                logger.warning(f"Claude stderr: {result.stderr}")
+            # End Claude activity tracking
+            if self.state_manager:
+                self.state_manager.update_claude_output(response)
+                self.state_manager.end_claude_activity()
 
             # Save to conversation memory
             if self.memory and response:
@@ -688,16 +797,36 @@ class Claudette:
             return response
         except FileNotFoundError:
             logger.error("Claude CLI not found")
+            if self.state_manager:
+                self.state_manager.end_claude_activity()
             self.sounds.play_error()
             return "I'm terribly sorry, sir, but it seems the Claude service isn't available at the moment."
         except subprocess.TimeoutExpired:
             logger.error("Claude CLI timed out")
+            if self.state_manager:
+                self.state_manager.end_claude_activity()
             self.sounds.play_error()
             return "My apologies, sir. That request took rather longer than expected."
         except Exception as e:
             logger.error(f"Claude CLI error: {e}")
+            if self.state_manager:
+                self.state_manager.end_claude_activity()
             self.sounds.play_error()
             return "I'm afraid something went wrong, sir. Technical difficulties, you understand."
+
+    def _speak_progress(self, text: str):
+        """Speak a brief progress update (runs in background thread)."""
+        try:
+            audio_data = self._audio_cache.get(text)
+            if audio_data is None:
+                audio_data = asyncio.run(self._synthesize_speech(text))
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                f.write(audio_data)
+                temp_path = f.name
+            self._play_audio_file(temp_path)
+            os.unlink(temp_path)
+        except Exception as e:
+            logger.error(f"Progress speech error: {e}")
 
     def _detect_speech_segment(self) -> np.ndarray | None:
         """Listen for speech using VAD, return audio when speech ends."""
@@ -774,6 +903,10 @@ class Claudette:
         transcription_lower = transcription.lower().strip()
         logger.info(f"Processing transcription: '{transcription}'")
         logger.debug(f"Lowercase: '{transcription_lower}'")
+
+        # Update web dashboard with transcription
+        if self.state_manager:
+            self.state_manager.update_last_transcription(transcription)
         logger.debug(
             f"Conversation mode: {self.conversation_mode}, Awaiting confirmation: {self.awaiting_confirmation}"
         )
@@ -993,6 +1126,11 @@ class Claudette:
         self.tray.start()
         self.waveform.start()
 
+        # Start web dashboard server
+        if self.web_server:
+            self.web_server.start()
+            print(f"Web dashboard: {self.web_server.url}")
+
         # Greeting
         self._speak("Good day, sir. Claudette at your service.")
         self.notifications.notify_started()
@@ -1002,6 +1140,8 @@ class Claudette:
             self.hotkey_manager.stop()
             self.tray.stop()
             self.waveform.stop()
+            if self.web_server:
+                self.web_server.stop()
             self._speak("Goodbye, sir. It's been a pleasure.")
             self.running = False
             sys.exit(0)
