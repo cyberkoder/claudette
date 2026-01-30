@@ -1059,8 +1059,10 @@ class Claudette:
         self.notifications.notify_wake()
 
         if not command or len(command) < 2:
-            # Just the wake word - respond and listen for command
-            self._speak("Yes, sir?")
+            # Just the wake word - greet and listen for command
+            import random
+            greetings = ["Yes, sir?", "Yes, sir?", "At your service, sir.", "Sir?", "How may I assist you, sir?"]
+            self._speak(random.choice(greetings))
 
             # Active listening mode - wait for the actual command
             print("   (Listening for command...)")
@@ -1083,6 +1085,10 @@ class Claudette:
                     # Now execute the command
                     self._execute_and_respond(command)
         else:
+            # Wake word + command - acknowledge and execute
+            import random
+            acknowledgments = ["Right away, sir.", "On it, sir.", "Certainly, sir.", "Very good, sir.", "Of course, sir."]
+            self._speak(random.choice(acknowledgments))
             self._execute_and_respond(command)
 
     def _execute_and_respond(self, command: str):
