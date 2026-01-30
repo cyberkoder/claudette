@@ -295,24 +295,106 @@
 
         <!-- Skills Page -->
         <div x-show="currentPage === 'skills'" class="page">
-            <h1>Skills</h1>
-            <p class="page-description">Built-in and custom skills that Claudette can execute instantly.</p>
+            <h1>Skills & Capabilities</h1>
+            <p class="page-description">Voice commands and tools that Claudette can use to help you.</p>
 
-            <div class="skills-grid">
-                <template x-for="skill in skills" :key="skill.name">
-                    <div class="card skill-card">
-                        <h3 x-text="skill.name"></h3>
-                        <p class="skill-description" x-text="skill.description"></p>
-                        <div class="skill-triggers">
-                            <span class="trigger-label">Triggers:</span>
-                            <template x-for="trigger in skill.triggers.slice(0, 3)" :key="trigger">
-                                <span class="trigger-tag" x-text="trigger"></span>
+            <!-- Search/Filter -->
+            <div class="skills-search">
+                <input type="text" placeholder="Search skills..." x-model="skillSearch"
+                       class="search-input">
+                <div class="category-filters">
+                    <button class="filter-btn" :class="{ active: skillFilter === 'all' }"
+                            @click="skillFilter = 'all'">All</button>
+                    <button class="filter-btn" :class="{ active: skillFilter === 'skills' }"
+                            @click="skillFilter = 'skills'">Voice Skills</button>
+                    <button class="filter-btn" :class="{ active: skillFilter === 'mcp' }"
+                            @click="skillFilter = 'mcp'">MCP Tools</button>
+                </div>
+            </div>
+
+            <!-- MCP Tools Section -->
+            <div class="skills-section" x-show="skillFilter === 'all' || skillFilter === 'mcp'">
+                <h2 class="section-title">
+                    <span class="section-icon mcp">M</span>
+                    MCP Tools
+                    <span class="section-badge" x-text="mcpTools.length + ' tools'"></span>
+                </h2>
+                <p class="section-description">External integrations accessed through Claude - ask naturally and Claudette will use the right tool.</p>
+
+                <div class="mcp-tools-grid">
+                    <template x-for="tool in filteredMCPTools" :key="tool.name">
+                        <div class="card mcp-tool-card">
+                            <div class="tool-header">
+                                <span class="tool-icon" :class="'icon-' + tool.category" x-text="tool.icon"></span>
+                                <h3 x-text="tool.name"></h3>
+                            </div>
+                            <p class="tool-description" x-text="tool.description"></p>
+                            <div class="tool-examples">
+                                <span class="examples-label">Try saying:</span>
+                                <div class="examples-list">
+                                    <template x-for="(example, i) in tool.examples" :key="i">
+                                        <span class="example-phrase" x-text="'\"' + example + '\"'"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Voice Skills Section -->
+            <div class="skills-section" x-show="skillFilter === 'all' || skillFilter === 'skills'">
+                <h2 class="section-title">
+                    <span class="section-icon voice">V</span>
+                    Voice Skills
+                    <span class="section-badge" x-text="skillsData.length + ' skills'"></span>
+                </h2>
+                <p class="section-description">Instant commands processed locally - no Claude API call needed.</p>
+
+                <!-- Skill Categories -->
+                <template x-for="category in skillCategories" :key="category.id">
+                    <div class="skill-category" x-show="getSkillsByCategory(category.id).length > 0">
+                        <h3 class="category-title">
+                            <span class="category-icon" :style="'background:' + category.color" x-text="category.icon"></span>
+                            <span x-text="category.name"></span>
+                        </h3>
+                        <div class="skills-grid">
+                            <template x-for="skill in getSkillsByCategory(category.id)" :key="skill.name">
+                                <div class="card skill-card" :class="{ expanded: expandedSkill === skill.name }"
+                                     @click="expandedSkill = expandedSkill === skill.name ? null : skill.name">
+                                    <div class="skill-header">
+                                        <span class="skill-icon" x-text="skill.icon"></span>
+                                        <div class="skill-info">
+                                            <h4 x-text="formatSkillName(skill.name)"></h4>
+                                            <p class="skill-description" x-text="skill.description"></p>
+                                        </div>
+                                        <span class="expand-icon" x-text="expandedSkill === skill.name ? '−' : '+'"></span>
+                                    </div>
+
+                                    <div class="skill-details" x-show="expandedSkill === skill.name" x-transition
+                                        <div class="skill-example" x-show="skill.example">
+                                            <span class="example-label">Example:</span>
+                                            <span class="example-text" x-text="'\"' + skill.example + '\"'"></span>
+                                        </div>
+                                        <div class="skill-triggers-full">
+                                            <span class="triggers-label">All trigger phrases:</span>
+                                            <div class="triggers-list">
+                                                <template x-for="trigger in skill.triggers" :key="trigger">
+                                                    <span class="trigger-tag" x-text="trigger"></span>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </template>
-                            <span x-show="skill.triggers.length > 3" class="more-triggers"
-                                  x-text="'+' + (skill.triggers.length - 3) + ' more'"></span>
                         </div>
                     </div>
                 </template>
+            </div>
+
+            <!-- No Results -->
+            <div class="no-results" x-show="filteredMCPTools.length === 0 && filteredSkills.length === 0">
+                <p>No skills found matching "<span x-text="skillSearch"></span>"</p>
             </div>
         </div>
 

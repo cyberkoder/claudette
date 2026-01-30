@@ -54,6 +54,26 @@ class SkillInfo(BaseModel):
     name: str
     description: str
     triggers: list[str]
+    category: str = "builtin"
+    icon: str = "K"
+    example: str = ""
+
+
+class MCPToolInfo(BaseModel):
+    """Model for MCP tool information."""
+
+    name: str
+    description: str
+    category: str
+    icon: str
+    examples: list[str]
+
+
+class SkillsResponse(BaseModel):
+    """Response model for skills endpoint."""
+
+    skills: list[SkillInfo]
+    mcp_tools: list[MCPToolInfo]
 
 
 class HistoryEntry(BaseModel):
@@ -209,14 +229,83 @@ def create_api_router(state_manager: Any) -> APIRouter:
             "message": "Config file saving not yet implemented. Changes are runtime-only.",
         }
 
-    @router.get("/skills", response_model=list[SkillInfo])
+    @router.get("/skills", response_model=SkillsResponse)
     async def get_skills():
-        """Get list of available skills."""
-        skills = state_manager.get_skills()
-        return [
-            SkillInfo(name=s["name"], description=s["description"], triggers=s["triggers"])
-            for s in skills
+        """Get list of available skills and MCP tools."""
+        raw_skills = state_manager.get_skills()
+
+        # Skill category and icon mappings
+        skill_metadata = {
+            "time": ("info", "T", "What time is it?"),
+            "date": ("info", "D", "What's the date today?"),
+            "status": ("system", "S", "What's your status?"),
+            "system_info": ("system", "I", "Tell me about my computer"),
+            "battery": ("system", "B", "What's my battery level?"),
+            "volume": ("media", "V", "Volume up / Turn it down"),
+            "screenshot": ("media", "C", "Take a screenshot"),
+            "lock_screen": ("system", "L", "Lock the screen"),
+            "clear_memory": ("memory", "M", "Clear memory / Start fresh"),
+            "voice_change": ("settings", "O", "Change voice to Libby"),
+            "personality": ("settings", "P", "Change personality to butler"),
+            "wake_word": ("settings", "W", "Add wake word variant"),
+            "list_skills": ("help", "?", "What can you do?"),
+            "greeting": ("social", "H", "Good morning, Claudette"),
+            "joke": ("social", "J", "Tell me a joke"),
+        }
+
+        skills = []
+        for s in raw_skills:
+            meta = skill_metadata.get(s["name"], ("builtin", "K", ""))
+            skills.append(SkillInfo(
+                name=s["name"],
+                description=s["description"],
+                triggers=s["triggers"],
+                category=meta[0],
+                icon=meta[1],
+                example=meta[2]
+            ))
+
+        # MCP Tools
+        mcp_tools = [
+            MCPToolInfo(
+                name="Unraid Server",
+                description="Access your Unraid NAS server - check Docker containers, browse files, execute commands, and monitor system status",
+                category="infrastructure",
+                icon="U",
+                examples=[
+                    "Check my downloads",
+                    "What containers are running?",
+                    "How much disk space do I have?",
+                    "Show me the Plex logs"
+                ]
+            ),
+            MCPToolInfo(
+                name="News Feed",
+                description="Get the latest news headlines from BBC News across various categories",
+                category="information",
+                icon="N",
+                examples=[
+                    "What's in the news?",
+                    "Give me technology news",
+                    "Any business headlines?",
+                    "What's happening in the world?"
+                ]
+            ),
+            MCPToolInfo(
+                name="Web Search",
+                description="Search the web using DuckDuckGo for current information",
+                category="information",
+                icon="S",
+                examples=[
+                    "Search for Python FastAPI tutorial",
+                    "Look up the weather in London",
+                    "Find information about...",
+                    "Search the web for..."
+                ]
+            ),
         ]
+
+        return SkillsResponse(skills=skills, mcp_tools=mcp_tools)
 
     @router.get("/history", response_model=HistoryResponse)
     async def get_history(limit: int = 50, offset: int = 0):

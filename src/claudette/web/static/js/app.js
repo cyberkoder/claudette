@@ -60,10 +60,28 @@ function claudetteDashboard() {
         // Data
         voices: [],
         personalities: [],
-        skills: [],
+        skillsData: [],
+        mcpTools: [],
         history: [],
         logs: [],
         systemInfo: null,
+
+        // Skills page state
+        skillSearch: '',
+        skillFilter: 'all',
+        expandedSkill: null,
+
+        // Skill categories
+        skillCategories: [
+            { id: 'info', name: 'Information', icon: 'i', color: 'var(--accent-blue)' },
+            { id: 'system', name: 'System Control', icon: 'S', color: 'var(--accent-green)' },
+            { id: 'media', name: 'Media', icon: 'M', color: 'var(--accent-purple)' },
+            { id: 'social', name: 'Social', icon: 'C', color: 'var(--accent-pink)' },
+            { id: 'memory', name: 'Memory', icon: 'm', color: 'var(--accent-yellow)' },
+            { id: 'settings', name: 'Settings', icon: 'G', color: '#6e7681' },
+            { id: 'help', name: 'Help', icon: '?', color: 'var(--text-muted)' },
+            { id: 'builtin', name: 'Other', icon: 'O', color: 'var(--border-color)' },
+        ],
 
         // UI state
         autoScrollLogs: true,
@@ -101,6 +119,28 @@ function claudetteDashboard() {
                 'idle': '\u{1F4A4}'        // zzz
             };
             return iconMap[this.stateClass] || '\u{2753}';
+        },
+
+        // Filtered skills based on search
+        get filteredSkills() {
+            if (!this.skillSearch) return this.skillsData;
+            const search = this.skillSearch.toLowerCase();
+            return this.skillsData.filter(s =>
+                s.name.toLowerCase().includes(search) ||
+                s.description.toLowerCase().includes(search) ||
+                s.triggers.some(t => t.toLowerCase().includes(search))
+            );
+        },
+
+        // Filtered MCP tools based on search
+        get filteredMCPTools() {
+            if (!this.skillSearch) return this.mcpTools;
+            const search = this.skillSearch.toLowerCase();
+            return this.mcpTools.filter(t =>
+                t.name.toLowerCase().includes(search) ||
+                t.description.toLowerCase().includes(search) ||
+                t.examples.some(e => e.toLowerCase().includes(search))
+            );
         },
 
         // Initialization
@@ -298,11 +338,25 @@ function claudetteDashboard() {
             try {
                 const response = await fetch('/api/skills');
                 if (response.ok) {
-                    this.skills = await response.json();
+                    const data = await response.json();
+                    this.skillsData = data.skills || [];
+                    this.mcpTools = data.mcp_tools || [];
                 }
             } catch (error) {
                 console.error('Failed to load skills:', error);
             }
+        },
+
+        // Get skills filtered by category
+        getSkillsByCategory(categoryId) {
+            return this.filteredSkills.filter(s => s.category === categoryId);
+        },
+
+        // Format skill name for display (snake_case to Title Case)
+        formatSkillName(name) {
+            return name.split('_')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
         },
 
         async loadHistory() {
