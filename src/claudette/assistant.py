@@ -550,9 +550,17 @@ class Claudette:
             if audio_data.dtype != np.float32:
                 audio_data = audio_data.astype(np.float32)
 
+            # Use initial_prompt to bias Whisper toward recognizing the wake word
+            # This helps with uncommon names like "Claudette"
+            wake_word_prompt = f"{self.wake_word.capitalize()}, "
+
             # Transcribe
             segments, info = self.whisper_model.transcribe(
-                audio_data, language=self.whisper_language, beam_size=5, vad_filter=True
+                audio_data,
+                language=self.whisper_language,
+                beam_size=5,
+                vad_filter=True,
+                initial_prompt=wake_word_prompt,
             )
 
             # Collect all segments
