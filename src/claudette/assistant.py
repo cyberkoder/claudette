@@ -189,6 +189,7 @@ class Claudette:
         self.vad_threshold = self.config["vad"]["threshold"]
         self.min_speech_ms = self.config["vad"]["min_speech_ms"]
         self.silence_duration = self.config["vad"]["silence_duration"]
+        self.energy_threshold = self.config["vad"].get("energy_threshold", 0.005)  # Min audio energy
 
         # Whisper settings
         self.whisper_mode = self.config.get("whisper", {}).get("mode", "remote")
@@ -853,6 +854,24 @@ class Claudette:
                 while len(pending_audio) >= chunk_samples:
                     vad_chunk = pending_audio[:chunk_samples]
                     pending_audio = pending_audio[chunk_samples:]
+
+                    # Check energy level first (filter out quiet background noise)
+                    chunk_energy = np.sqrt(np.mean(vad_chunk ** 2))
+
+                    if chunk_energy < self.energy_threshold:
+                        # Too quiet - skip VAD processing
+                        if speech_detected:
+                            silence_chunks += 1
+                            if silence_chunks >= silence_chunks_threshold:
+                                if speech_chunks >= min_speech_chunks:
+                                    return np.concatenate(audio_buffer)
+                                else:
+                                    audio_buffer = []
+                                    speech_detected = False
+                                    speech_chunks = 0
+                                    silence_chunks = 0
+                                    self._update_state(VoiceState.LISTENING)
+                        continue
 
                     # Move tensor to VAD device (CPU or CUDA)
                     vad_tensor = torch.from_numpy(vad_chunk)
