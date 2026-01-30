@@ -63,11 +63,10 @@
 
             <div class="status-grid">
                 <!-- State Card -->
-                <div class="card state-card">
+                <div class="card state-card wide">
                     <h3>Current State</h3>
                     <div class="state-indicator" :class="stateClass">
-                        <span class="state-icon" x-text="stateIcon"></span>
-                        <span class="state-text" x-text="state.state || 'idle'"></span>
+                        <span class="state-text" x-text="state.state || 'Idle'"></span>
                     </div>
                     <div class="state-details">
                         <p x-show="state.conversation_mode">

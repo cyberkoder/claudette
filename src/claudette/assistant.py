@@ -213,29 +213,30 @@ class Claudette:
 
         # Default variants for common transcription errors
         self.default_wake_variants = [
-            "claudet",
-            "claudia",
-            "clodette",
-            "cladette",
-            "cloud",
-            "claud",
-            "audit",
-            "audette",
-            "kladette",
-            "klodette",
-            "plot it",
-            "godette",
-            "colette",
-            "clodet",
-            "clawed",
-            "plaudit",
-            "laudette",
-            "lodette",
-            "la dette",
-            "hey claudette",
-            "hey claudet",
-            "okay claudette",
+            # Direct variations
+            "claudet", "claudia", "clodette", "cladette", "claudete",
+            "claudett", "clodett", "claudetta", "claudete",
+            # Phonetic mishearings
+            "cloud", "claud", "claude", "clowd", "klaud",
+            "audit", "audette", "plaudit",
+            "kladette", "klodette", "kludette",
+            "plot it", "plot et", "clot it",
+            "godette", "codette", "modette",
+            "colette", "jolette", "polette",
+            "clodet", "clawed", "clawdet",
+            "laudette", "lodette", "la dette",
+            "clue debt", "cloud debt", "claw debt",
+            "clue det", "clo det", "glow det",
+            # With prefixes
+            "hey claudette", "hey claudet", "hey claude",
+            "okay claudette", "ok claudette", "oh claudette",
+            "hi claudette", "yo claudette",
+            # Partial/fragmented
+            "dett", "dette", "odette", "adette",
         ]
+
+        # Fuzzy matching threshold (0-1, higher = stricter)
+        self.wake_word_fuzzy_threshold = 0.7
 
         # TTS settings - British English female voice
         self.tts_voice = self.config.get("tts", {}).get("voice", "en-GB-SoniaNeural")
@@ -889,6 +890,79 @@ class Claudette:
 
         return None
 
+    def _detect_wake_word(self, transcription: str, transcription_lower: str) -> tuple[str | None, str | None]:
+        """Detect wake word in transcription using multiple strategies.
+
+        Returns:
+            Tuple of (command, matched_variant) or (None, None) if no wake word found.
+        """
+        from difflib import SequenceMatcher
+
+        # Combine all variants
+        wake_word_variants = [self.wake_word]
+        wake_word_variants.extend(self.wake_word_variants)
+        wake_word_variants.extend(self.default_wake_variants)
+        wake_word_variants = list(dict.fromkeys(wake_word_variants))
+
+        # Clean transcription - remove extra punctuation at start
+        clean_trans = transcription_lower.lstrip(",.!?;:'\" ")
+
+        # Strategy 1: Exact match at start
+        for variant in wake_word_variants:
+            for suffix in [",", ".", "!", "?", " ", ""]:
+                pattern = f"{variant}{suffix}"
+                if clean_trans.startswith(pattern):
+                    command = transcription[len(transcription) - len(clean_trans) + len(pattern):].strip()
+                    command = command.lstrip(",.!? ")
+                    logger.info(f"Wake word EXACT match: '{variant}'")
+                    return command, variant
+
+        # Strategy 2: Check first 5 words for exact variant match
+        words = clean_trans.split()[:5]
+        for i, word in enumerate(words):
+            # Clean the word of punctuation
+            clean_word = word.strip(",.!?;:'\"")
+            if clean_word in wake_word_variants:
+                # Found wake word - command is everything after
+                command = " ".join(transcription.split()[i+1:]).strip()
+                command = command.lstrip(",.!? ")
+                logger.info(f"Wake word found at word {i}: '{clean_word}'")
+                return command, clean_word
+
+        # Strategy 3: Fuzzy match on first 3 words
+        for i, word in enumerate(words[:3]):
+            clean_word = word.strip(",.!?;:'\"")
+            if len(clean_word) < 3:
+                continue
+
+            # Check similarity to main wake word
+            similarity = SequenceMatcher(None, clean_word, self.wake_word).ratio()
+            if similarity >= self.wake_word_fuzzy_threshold:
+                command = " ".join(transcription.split()[i+1:]).strip()
+                command = command.lstrip(",.!? ")
+                logger.info(f"Wake word FUZZY match: '{clean_word}' ~ '{self.wake_word}' ({similarity:.2f})")
+                return command, clean_word
+
+            # Also check against shorter variants for fuzzy
+            for variant in ["claudet", "claude", "claud"]:
+                similarity = SequenceMatcher(None, clean_word, variant).ratio()
+                if similarity >= 0.8:  # Higher threshold for short variants
+                    command = " ".join(transcription.split()[i+1:]).strip()
+                    command = command.lstrip(",.!? ")
+                    logger.info(f"Wake word FUZZY match: '{clean_word}' ~ '{variant}' ({similarity:.2f})")
+                    return command, clean_word
+
+        # Strategy 4: Check if any word contains the wake word
+        for i, word in enumerate(words[:4]):
+            clean_word = word.strip(",.!?;:'\"")
+            if self.wake_word in clean_word or "claudet" in clean_word or "claude" in clean_word:
+                command = " ".join(transcription.split()[i+1:]).strip()
+                command = command.lstrip(",.!? ")
+                logger.info(f"Wake word SUBSTRING match in: '{clean_word}'")
+                return command, clean_word
+
+        return None, None
+
     def _process_audio(self, audio: np.ndarray):
         """Process recorded audio: transcribe and handle wake word."""
         logger.debug(f"Processing audio segment: {len(audio)} samples")
@@ -970,36 +1044,10 @@ class Claudette:
             self._execute_and_respond(transcription)
             return
 
-        # Check for wake word - combine configured and default variants
-        wake_word_variants = [self.wake_word]
-        wake_word_variants.extend(self.wake_word_variants)  # User-configured variants
-        wake_word_variants.extend(self.default_wake_variants)  # Default variants
-        # Remove duplicates while preserving order
-        wake_word_variants = list(dict.fromkeys(wake_word_variants))
+        # Check for wake word using improved detection
+        command, matched_variant = self._detect_wake_word(transcription, transcription_lower)
 
-        command = None
-        wake_word_found = False
-        matched_variant = None
-
-        logger.debug(f"Checking for wake word variants: {wake_word_variants}")
-
-        for variant in wake_word_variants:
-            for suffix in [",", ".", "!", "?", " ", ""]:
-                pattern = f"{variant}{suffix}"
-                if transcription_lower.startswith(pattern):
-                    wake_word_found = True
-                    matched_variant = variant
-                    # Extract command - find where the wake word ends
-                    command = transcription[len(pattern) :].strip()
-                    command = command.lstrip(",.!? ")
-                    logger.info(
-                        f"Wake word MATCH: variant='{variant}', pattern='{pattern}', command='{command}'"
-                    )
-                    break
-            if wake_word_found:
-                break
-
-        if not wake_word_found:
+        if matched_variant is None:
             # Not for us - show it was ignored
             logger.info(f"No wake word found in: '{transcription_lower}'")
             print("   (No wake word detected)")
