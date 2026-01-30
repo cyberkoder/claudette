@@ -850,6 +850,11 @@ class Claudette:
         min_speech_chunks = int((self.min_speech_ms / 1000) / chunk_duration_sec)
         speech_chunks = 0
 
+        # Pre-buffer to capture audio BEFORE VAD triggers (catches wake word)
+        pre_buffer_seconds = 0.8  # Keep 0.8 seconds of audio before speech detected
+        pre_buffer_chunks = int(pre_buffer_seconds / chunk_duration_sec)
+        pre_buffer = []
+
         self.vad_model.reset_states()
         pending_audio = np.array([], dtype=np.float32)
 
@@ -862,6 +867,11 @@ class Claudette:
                 while len(pending_audio) >= chunk_samples:
                     vad_chunk = pending_audio[:chunk_samples]
                     pending_audio = pending_audio[chunk_samples:]
+
+                    # Always add to pre-buffer (rolling buffer)
+                    pre_buffer.append(vad_chunk)
+                    if len(pre_buffer) > pre_buffer_chunks:
+                        pre_buffer.pop(0)
 
                     # Move tensor to VAD device (CPU or CUDA)
                     vad_tensor = torch.from_numpy(vad_chunk)
@@ -876,6 +886,8 @@ class Claudette:
                         if not speech_detected:
                             self._update_state(VoiceState.RECORDING)
                             self.sounds.play_record()
+                            # Include pre-buffer when speech starts (catches wake word)
+                            audio_buffer = list(pre_buffer)
                         speech_detected = True
                         speech_chunks += 1
                         silence_chunks = 0
