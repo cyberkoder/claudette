@@ -85,3 +85,4 @@ audio_cache/
 # PyTorch cache
 .cache/
 
+.claudette_memory.json
