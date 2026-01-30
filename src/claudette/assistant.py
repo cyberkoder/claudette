@@ -855,24 +855,6 @@ class Claudette:
                     vad_chunk = pending_audio[:chunk_samples]
                     pending_audio = pending_audio[chunk_samples:]
 
-                    # Check energy level first (filter out quiet background noise)
-                    chunk_energy = np.sqrt(np.mean(vad_chunk ** 2))
-
-                    if chunk_energy < self.energy_threshold:
-                        # Too quiet - skip VAD processing
-                        if speech_detected:
-                            silence_chunks += 1
-                            if silence_chunks >= silence_chunks_threshold:
-                                if speech_chunks >= min_speech_chunks:
-                                    return np.concatenate(audio_buffer)
-                                else:
-                                    audio_buffer = []
-                                    speech_detected = False
-                                    speech_chunks = 0
-                                    silence_chunks = 0
-                                    self._update_state(VoiceState.LISTENING)
-                        continue
-
                     # Move tensor to VAD device (CPU or CUDA)
                     vad_tensor = torch.from_numpy(vad_chunk)
                     if self.vad_device == "cuda":
@@ -909,11 +891,12 @@ class Claudette:
 
         return None
 
-    def _detect_wake_word(self, transcription: str, transcription_lower: str) -> tuple[str | None, str | None]:
+    def _detect_wake_word(self, transcription: str, transcription_lower: str) -> tuple[str | None, str | None, bool]:
         """Detect wake word in transcription using multiple strategies.
 
         Returns:
-            Tuple of (command, matched_variant) or (None, None) if no wake word found.
+            Tuple of (command, matched_variant, near_miss) where near_miss indicates
+            if something close to the wake word was detected but not close enough.
         """
         from difflib import SequenceMatcher
 
@@ -926,6 +909,10 @@ class Claudette:
         # Clean transcription - remove extra punctuation at start
         clean_trans = transcription_lower.lstrip(",.!?;:'\" ")
 
+        # Track best near-miss for potential "did you call me?" response
+        best_similarity = 0
+        near_miss_word = None
+
         # Strategy 1: Exact match at start
         for variant in wake_word_variants:
             for suffix in [",", ".", "!", "?", " ", ""]:
@@ -934,7 +921,7 @@ class Claudette:
                     command = transcription[len(transcription) - len(clean_trans) + len(pattern):].strip()
                     command = command.lstrip(",.!? ")
                     logger.info(f"Wake word EXACT match: '{variant}'")
-                    return command, variant
+                    return command, variant, False
 
         # Strategy 2: Check first 5 words for exact variant match
         words = clean_trans.split()[:5]
@@ -946,7 +933,7 @@ class Claudette:
                 command = " ".join(transcription.split()[i+1:]).strip()
                 command = command.lstrip(",.!? ")
                 logger.info(f"Wake word found at word {i}: '{clean_word}'")
-                return command, clean_word
+                return command, clean_word, False
 
         # Strategy 3: Fuzzy match on first 3 words
         for i, word in enumerate(words[:3]):
@@ -956,20 +943,29 @@ class Claudette:
 
             # Check similarity to main wake word
             similarity = SequenceMatcher(None, clean_word, self.wake_word).ratio()
+
+            # Track near misses (50-70% similar)
+            if similarity > best_similarity:
+                best_similarity = similarity
+                near_miss_word = clean_word
+
             if similarity >= self.wake_word_fuzzy_threshold:
                 command = " ".join(transcription.split()[i+1:]).strip()
                 command = command.lstrip(",.!? ")
                 logger.info(f"Wake word FUZZY match: '{clean_word}' ~ '{self.wake_word}' ({similarity:.2f})")
-                return command, clean_word
+                return command, clean_word, False
 
             # Also check against shorter variants for fuzzy
             for variant in ["claudet", "claude", "claud"]:
                 similarity = SequenceMatcher(None, clean_word, variant).ratio()
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    near_miss_word = clean_word
                 if similarity >= 0.8:  # Higher threshold for short variants
                     command = " ".join(transcription.split()[i+1:]).strip()
                     command = command.lstrip(",.!? ")
                     logger.info(f"Wake word FUZZY match: '{clean_word}' ~ '{variant}' ({similarity:.2f})")
-                    return command, clean_word
+                    return command, clean_word, False
 
         # Strategy 4: Check if any word contains the wake word
         for i, word in enumerate(words[:4]):
@@ -978,9 +974,17 @@ class Claudette:
                 command = " ".join(transcription.split()[i+1:]).strip()
                 command = command.lstrip(",.!? ")
                 logger.info(f"Wake word SUBSTRING match in: '{clean_word}'")
-                return command, clean_word
+                return command, clean_word, False
 
-        return None, None
+        # Check for near miss (sounded close but not close enough)
+        # Only trigger if transcription is short (likely an attempt to call her)
+        is_near_miss = (best_similarity >= 0.5 and len(words) <= 4) or \
+                       (len(words) == 1 and len(words[0]) >= 4 and best_similarity >= 0.4)
+
+        if is_near_miss:
+            logger.info(f"Near miss detected: '{near_miss_word}' ({best_similarity:.2f} similar)")
+
+        return None, None, is_near_miss
 
     def _process_audio(self, audio: np.ndarray):
         """Process recorded audio: transcribe and handle wake word."""
@@ -1064,12 +1068,25 @@ class Claudette:
             return
 
         # Check for wake word using improved detection
-        command, matched_variant = self._detect_wake_word(transcription, transcription_lower)
+        command, matched_variant, near_miss = self._detect_wake_word(transcription, transcription_lower)
 
         if matched_variant is None:
-            # Not for us - show it was ignored
-            logger.info(f"No wake word found in: '{transcription_lower}'")
-            print("   (No wake word detected)")
+            if near_miss:
+                # Sounded close - ask for clarification
+                import random
+                clarifications = [
+                    "I'm sorry, I didn't quite catch that, sir.",
+                    "Did you call for me, sir?",
+                    "Pardon me, sir?",
+                    "I thought I heard my name, sir.",
+                ]
+                logger.info(f"Near miss - asking for clarification")
+                print("   (Near miss - asking for clarification)")
+                self._speak(random.choice(clarifications))
+            else:
+                # Not for us - show it was ignored
+                logger.info(f"No wake word found in: '{transcription_lower}'")
+                print("   (No wake word detected)")
             return
 
         logger.info(f"Wake word detected: '{matched_variant}', extracted command: '{command}'")
